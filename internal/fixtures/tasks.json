@@ -1,0 +1,80 @@
+[
+  {
+    "id": "sess_01HX3A",
+    "title": "refactor auth module to use OAuth2 PKCE",
+    "agent": "codex",
+    "model": "gpt-5-sonnet",
+    "workdir": "/Users/demon/projects/rag-broker",
+    "initial_status": "running",
+    "tokens_used": 14234,
+    "tokens_budget": 128000,
+    "cost_usd": 0.12,
+    "started_at": "-00:02:14",
+    "transcript": "refactor-auth.md"
+  },
+  {
+    "id": "sess_01HX3B",
+    "title": "migrate database schema to v7",
+    "agent": "opencode",
+    "model": "gpt-5-sonnet",
+    "workdir": "/Users/demon/projects/rag-broker",
+    "initial_status": "awaiting_perm",
+    "tokens_used": 8921,
+    "tokens_budget": 128000,
+    "cost_usd": 0.08,
+    "started_at": "-00:05:47",
+    "transcript": "migrate-db.md"
+  },
+  {
+    "id": "sess_01HX3C",
+    "title": "add vitest coverage for retriever",
+    "agent": "codex",
+    "model": "gpt-5-mini",
+    "workdir": "/Users/demon/projects/rag-broker",
+    "initial_status": "awaiting_input",
+    "tokens_used": 4102,
+    "tokens_budget": 128000,
+    "cost_usd": 0.02,
+    "started_at": "-00:01:30",
+    "transcript": "add-tests.md"
+  },
+  {
+    "id": "sess_01HW9D",
+    "title": "fix lint errors in ingestion worker",
+    "agent": "codex",
+    "model": "gpt-5-mini",
+    "workdir": "/Users/demon/projects/rag-broker",
+    "initial_status": "completed",
+    "tokens_used": 2847,
+    "tokens_budget": 128000,
+    "cost_usd": 0.01,
+    "started_at": "-00:12:00",
+    "transcript": "lint-fix.md"
+  },
+  {
+    "id": "sess_01HW9E",
+    "title": "upgrade drizzle to 0.33",
+    "agent": "opencode",
+    "model": "gpt-5-sonnet",
+    "workdir": "/Users/demon/projects/rag-broker",
+    "initial_status": "failed",
+    "tokens_used": 17203,
+    "tokens_budget": 128000,
+    "cost_usd": 0.18,
+    "started_at": "-00:34:11",
+    "transcript": "upgrade-drizzle.md"
+  },
+  {
+    "id": "sess_01HW9F",
+    "title": "write CHANGELOG entries for v0.4",
+    "agent": "codex",
+    "model": "gpt-5-mini",
+    "workdir": "/Users/demon/projects/rag-broker",
+    "initial_status": "paused",
+    "tokens_used": 1203,
+    "tokens_budget": 128000,
+    "cost_usd": 0.00,
+    "started_at": "-01:02:00",
+    "transcript": "changelog.md"
+  }
+]

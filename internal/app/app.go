@@ -14,12 +14,14 @@ import (
 	"github.com/demon/daemon-client/internal/component/header"
 	"github.com/demon/daemon-client/internal/component/help"
 	"github.com/demon/daemon-client/internal/component/input"
+	"github.com/demon/daemon-client/internal/component/onboarding"
 	"github.com/demon/daemon-client/internal/component/palette"
 	"github.com/demon/daemon-client/internal/component/settings"
 	"github.com/demon/daemon-client/internal/component/sidebar"
 	"github.com/demon/daemon-client/internal/component/splash"
 	"github.com/demon/daemon-client/internal/component/toast"
 	"github.com/demon/daemon-client/internal/component/transcript"
+	"github.com/demon/daemon-client/internal/config"
 	"github.com/demon/daemon-client/internal/layout"
 	"github.com/demon/daemon-client/internal/session"
 	"github.com/demon/daemon-client/internal/session/mock"
@@ -30,6 +32,7 @@ type screen int
 
 const (
 	screenSplash screen = iota
+	screenOnboarding
 	screenMain
 	screenSettings
 )
@@ -40,6 +43,10 @@ type Options struct {
 	DevMode bool
 	Theme   string // name lookup in theme.Registry; falls back to default
 	Mouse   bool   // enable mouse capture (MouseModeCellMotion) in tea.View
+
+	// ForceOnboarding routes straight into the wizard even when a config
+	// already exists (bound to --reset-config / --onboarding flags).
+	ForceOnboarding bool
 }
 
 type Model struct {
@@ -82,21 +89,39 @@ type Model struct {
 
 	// where to return when closing a full-screen route (settings → main)
 	prevScreen screen
+
+	// onboarding wizard (nil unless routed there on first run)
+	onboard         *onboarding.Model
+	forceOnboarding bool
+	cfg             config.Config
 }
 
 // New constructs the root Model. Pass Options{} for defaults.
 func New(store *session.Store, eng *mock.Engine, opts Options) *Model {
-	t := theme.ByName(opts.Theme)
+	// Load any existing config up-front so theme/dev default choices can
+	// honor it. Missing file → Default() with UsedDefaults=true.
+	cfg, _ := config.Load()
+
+	// CLI --theme wins over the saved choice so demos can override.
+	themeName := opts.Theme
+	if themeName == "" || themeName == "charm-dark" {
+		if cfg.Theme != "" {
+			themeName = cfg.Theme
+		}
+	}
+	t := theme.ByName(themeName)
 	m := &Model{
-		screen:  screenSplash,
-		theme:   t,
-		styles:  theme.BuildStyles(t),
-		store:   store,
-		engine:  eng,
-		focus:   FocusSidebar,
-		autoFol: true,
-		devMode: opts.DevMode,
-		mouseOn: opts.Mouse,
+		screen:          screenSplash,
+		theme:           t,
+		styles:          theme.BuildStyles(t),
+		store:           store,
+		engine:          eng,
+		focus:           FocusSidebar,
+		autoFol:         true,
+		devMode:         opts.DevMode,
+		mouseOn:         opts.Mouse,
+		forceOnboarding: opts.ForceOnboarding,
+		cfg:             cfg,
 	}
 	m.palette = palette.New(defaultActions())
 	m.seedToasts()
@@ -123,6 +148,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
+		if m.onboard != nil {
+			m.onboard.SetSize(m.width, m.height)
+		}
 		return m, nil
 
 	case clockTickMsg:
@@ -131,10 +159,25 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case splash.DoneMsg:
 		if m.screen == screenSplash {
-			m.screen = screenMain
-			m.selectInitial()
+			m.routeAfterSplash()
 		}
 		return m, nil
+
+	case onboarding.DoneMsg:
+		m.cfg = msg.Cfg
+		// Apply theme choice from onboarding immediately.
+		m.setTheme(theme.ByName(m.cfg.Theme))
+		m.onboard = nil
+		m.screen = screenMain
+		m.selectInitial()
+		m.toasts.Push(toast.Toast{Kind: toast.Success, Title: "Setup complete",
+			Body: "config saved to " + config.Path()})
+		return m, nil
+
+	case onboarding.QuitConfirmMsg:
+		// Phase 1: Esc on the welcome step quits immediately. Phase 2 shows
+		// a confirm dialog first.
+		return m, tea.Quit
 
 	case session.AppendMsg:
 		if sess := m.store.Get(msg.ID); sess != nil {
@@ -170,9 +213,22 @@ func (m *Model) handleKey(k tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	key := k.String()
 
 	if m.screen == screenSplash {
-		m.screen = screenMain
-		m.selectInitial()
+		m.routeAfterSplash()
 		return m, nil
+	}
+
+	// Onboarding is a self-contained modal route. Only ⌃c⌃c escapes it
+	// without completing; all other keys go to the wizard.
+	if m.screen == screenOnboarding && m.onboard != nil {
+		if key == "ctrl+c" {
+			if time.Since(m.lastCtrlC) < 500*time.Millisecond {
+				return m, tea.Quit
+			}
+			m.lastCtrlC = time.Now()
+			return m, nil
+		}
+		cmd := m.onboard.Update(key, k.Text)
+		return m, cmd
 	}
 
 	// Modal handling first — they trap all keys.
@@ -569,6 +625,21 @@ func (m *Model) handleSettingsKey(key string) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+// routeAfterSplash decides where to go once the splash finishes or is
+// skipped. On first launch (no config) or with --reset-config we drop into
+// onboarding; otherwise we land on the main view.
+func (m *Model) routeAfterSplash() {
+	firstRun := !config.Exists()
+	if firstRun || m.forceOnboarding {
+		m.onboard = onboarding.New()
+		m.onboard.SetSize(m.width, m.height)
+		m.screen = screenOnboarding
+		return
+	}
+	m.screen = screenMain
+	m.selectInitial()
+}
+
 func (m *Model) selectInitial() {
 	sessions := sidebar.Flatten(m.store.All())
 	if len(sessions) == 0 {
@@ -603,6 +674,9 @@ func (m *Model) render() string {
 	}
 	if m.screen == screenSplash {
 		return splash.Render(m.theme, m.styles, m.width, m.height)
+	}
+	if m.screen == screenOnboarding && m.onboard != nil {
+		return m.onboard.Render(m.theme, m.styles)
 	}
 	var base string
 	if m.screen == screenSettings {

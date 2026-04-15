@@ -10,11 +10,14 @@ import (
 )
 
 type State struct {
-	ServerURL   string
-	Active      int
-	Max         int
-	TotalCost   float64
-	Now         time.Time
+	ServerURL string
+	Active    int
+	Max       int
+	TotalCost float64
+	Now       time.Time
+	// Focused is "settings", "help", or "" — drives the focused-button
+	// highlight (accent left bar + bold label).
+	Focused string
 }
 
 func Render(t *theme.Theme, st *theme.Styles, s State, w int) string {
@@ -29,8 +32,8 @@ func Render(t *theme.Theme, st *theme.Styles, s State, w int) string {
 		fg.Render(fmt.Sprintf("%d/%d sessions", s.Active, s.Max)),
 		dim.Render("⏱ " + s.Now.Format("15:04")),
 		dim.Render(fmt.Sprintf("$%.2f", s.TotalCost)),
-		dim.Render("[⚙]"),
-		dim.Render("[?]"),
+		renderBtn(t, "⚙", s.Focused == "settings"),
+		renderBtn(t, "?", s.Focused == "help"),
 	}
 
 	sep := dim.Render(" • ")
@@ -39,6 +42,15 @@ func Render(t *theme.Theme, st *theme.Styles, s State, w int) string {
 		line = ansiTruncate(line, w)
 	}
 	return line + strings.Repeat(" ", max(0, w-lipgloss.Width(line)))
+}
+
+func renderBtn(t *theme.Theme, glyph string, focused bool) string {
+	if focused {
+		bar := lipgloss.NewStyle().Foreground(t.Accent).Bold(true).Render("▌")
+		label := lipgloss.NewStyle().Foreground(t.Accent).Bold(true).Render(glyph)
+		return bar + label
+	}
+	return lipgloss.NewStyle().Foreground(t.Dim).Render("[" + glyph + "]")
 }
 
 func truncMiddle(s string, max int) string {

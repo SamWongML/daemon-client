@@ -18,12 +18,14 @@
 - **Help overlay** (`?`), **command palette** (`⌃p`, 20 actions, fuzzy filter)
 - **Dialogs**: alert, confirm, question (1–9), permission
 - **Toasts**: bottom-right stack, 4 s TTL
-- Dev cheats for injecting modals and state transitions on demand
+- **Themes**: 4 built-ins (`charm-dark`, `charm-light`, `tokyonight-storm`, `gruvbox-hard`) with live `⌃t` cycling and `--theme` flag
+- **Settings screen** (`⌃,` or palette): 8 categories, live theme preview, `⌃s` stub save
+- `--dev` flag gates dev cheats (off by default)
 - Responsive layout (compact / normal / wide breakpoints)
 
 ### What's next
 
-Onboarding wizard · settings page · light/auto themes · Ghostty caps (OSC 9;4, 52, 8, 777) · `--dev` flag gating · teatest golden files.
+Onboarding wizard (M4) · auto theme via OSC 11 · Ghostty caps (OSC 9;4, 52, 8, 777) · settings inline editing · teatest golden files.
 
 ---
 
@@ -38,7 +40,21 @@ go build -o daemonctl ./cmd/daemonctl
 
 # Or just go run it
 go run ./cmd/daemonctl
+
+# Dev mode (enables ⌃⌥ cheats + diagnostics)
+./daemonctl --dev
+
+# Pick a starting theme
+./daemonctl --theme tokyonight-storm
 ```
+
+### Flags
+
+| Flag          | Default       | Effect                                            |
+| ------------- | ------------- | ------------------------------------------------- |
+| `--dev`       | `false`       | Enables `⌃⌥{p,q,t,c,f}` dev cheats                |
+| `--no-mouse`  | `false`       | Disables mouse capture (keep native terminal select) |
+| `--theme`     | `charm-dark`  | Initial theme — `charm-dark`, `charm-light`, `tokyonight-storm`, `gruvbox-hard` |
 
 Target runtime: **Ghostty ≥ 1.2** on macOS or Linux. It degrades gracefully on Alacritty, Kitty, iTerm2, WezTerm, and tmux-wrapped sessions.
 
@@ -54,11 +70,12 @@ Minimum terminal size: **60 × 16**. Below that you get a centered "too small" m
 | ----------------- | --------------------------------- |
 | `?`               | Toggle help overlay               |
 | `⌃p`              | Command palette                   |
-| `⌃,`              | Settings *(soon)*                 |
+| `⌃,`              | Open settings                     |
+| `⌃t`              | Cycle theme                       |
 | `⌃c` then `⌃c`    | Quit (double-tap within 500 ms)   |
 | `⌃b`              | Toggle sidebar                    |
 | `tab` / `⇧tab`    | Focus next / previous pane        |
-| `esc`             | Close any open modal              |
+| `esc`             | Close any open modal / leave settings |
 
 ### Sidebar
 
@@ -76,7 +93,11 @@ Minimum terminal size: **60 × 16**. Below that you get a centered "too small" m
 
 `1`–`9` pick option · `←`/`→` move focus · `↵` confirm · `esc` cancel.
 
-### Dev cheats (phase 1)
+### Settings
+
+`j`/`k` move between categories · `⌃s` save (stubbed) · `⌃t` cycle theme · `esc` return to main.
+
+### Dev cheats (phase 1, `--dev` only)
 
 These inject mock events so the UI can be exercised without a real backend:
 

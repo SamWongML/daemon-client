@@ -15,6 +15,7 @@ import (
 	"github.com/demon/daemon-client/internal/component/help"
 	"github.com/demon/daemon-client/internal/component/input"
 	"github.com/demon/daemon-client/internal/component/palette"
+	"github.com/demon/daemon-client/internal/component/settings"
 	"github.com/demon/daemon-client/internal/component/sidebar"
 	"github.com/demon/daemon-client/internal/component/splash"
 	"github.com/demon/daemon-client/internal/component/toast"
@@ -30,7 +31,16 @@ type screen int
 const (
 	screenSplash screen = iota
 	screenMain
+	screenSettings
 )
+
+// Options controls runtime features for the app. Populated from CLI flags in
+// cmd/daemonctl/main.go.
+type Options struct {
+	DevMode bool
+	Theme   string // name lookup in theme.Registry; falls back to default
+	Mouse   bool   // enable mouse capture (MouseModeCellMotion) in tea.View
+}
 
 type Model struct {
 	screen        screen
@@ -62,13 +72,21 @@ type Model struct {
 	toasts      toast.Stack
 
 	devMode bool
+	mouseOn bool
 
 	// where to restore focus after closing a modal
 	focusBeforeModal FocusID
+
+	// settings screen state
+	settingsSel int
+
+	// where to return when closing a full-screen route (settings → main)
+	prevScreen screen
 }
 
-func New(store *session.Store, eng *mock.Engine) *Model {
-	t := theme.Dark()
+// New constructs the root Model. Pass Options{} for defaults.
+func New(store *session.Store, eng *mock.Engine, opts Options) *Model {
+	t := theme.ByName(opts.Theme)
 	m := &Model{
 		screen:  screenSplash,
 		theme:   t,
@@ -77,7 +95,8 @@ func New(store *session.Store, eng *mock.Engine) *Model {
 		engine:  eng,
 		focus:   FocusSidebar,
 		autoFol: true,
-		devMode: true, // phase 1: always on; a flag will gate this in M13
+		devMode: opts.DevMode,
+		mouseOn: opts.Mouse,
 	}
 	m.palette = palette.New(defaultActions())
 	m.seedToasts()
@@ -127,10 +146,24 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.store.SetStatus(msg.ID, msg.Status)
 		return m, nil
 
+	case SetThemeMsg:
+		m.setTheme(theme.ByName(msg.Name))
+		return m, nil
+
+	case CycleThemeMsg:
+		m.setTheme(theme.Next(m.theme.Name))
+		m.toasts.Push(toast.Toast{Kind: toast.Info, Title: "Theme", Body: m.theme.Label})
+		return m, nil
+
 	case tea.KeyPressMsg:
 		return m.handleKey(msg)
 	}
 	return m, nil
+}
+
+func (m *Model) setTheme(t *theme.Theme) {
+	m.theme = t
+	m.styles = theme.BuildStyles(t)
 }
 
 func (m *Model) handleKey(k tea.KeyPressMsg) (tea.Model, tea.Cmd) {
@@ -156,6 +189,11 @@ func (m *Model) handleKey(k tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
+	// Settings screen intercepts its own keys before the usual focus routing.
+	if m.screen == screenSettings {
+		return m.handleSettingsKey(key)
+	}
+
 	// Global, regardless of focus.
 	switch key {
 	case "ctrl+c":
@@ -173,6 +211,11 @@ func (m *Model) handleKey(k tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	case "ctrl+p":
 		m.openPalette()
 		return m, nil
+	case "ctrl+,":
+		m.openSettings()
+		return m, nil
+	case "ctrl+t":
+		return m, func() tea.Msg { return CycleThemeMsg{} }
 	case "tab":
 		m.focus = m.focus.Next()
 		return m, nil
@@ -410,7 +453,9 @@ func (m *Model) runAction(id string) (tea.Model, tea.Cmd) {
 	case "quit":
 		return m, tea.Quit
 	case "switch-theme":
-		m.toasts.Push(toast.Toast{Kind: toast.Info, Title: "Theme", Body: "(phase 2: multi-theme support)"})
+		return m, func() tea.Msg { return CycleThemeMsg{} }
+	case "open-settings":
+		m.openSettings()
 	default:
 		m.toasts.Push(toast.Toast{Kind: toast.Info, Title: "Action", Body: id + " — phase 2"})
 	}
@@ -469,6 +514,61 @@ func (m *Model) injectRandomToast() {
 	m.toasts.Push(samples[rand.Intn(len(samples))])
 }
 
+// --- settings screen ---
+
+func (m *Model) openSettings() {
+	if m.screen == screenSettings {
+		return
+	}
+	m.prevScreen = m.screen
+	m.screen = screenSettings
+}
+
+func (m *Model) closeSettings() {
+	if m.prevScreen == 0 {
+		m.screen = screenMain
+	} else {
+		m.screen = m.prevScreen
+	}
+}
+
+func (m *Model) handleSettingsKey(key string) (tea.Model, tea.Cmd) {
+	switch key {
+	case "esc", "ctrl+,":
+		m.closeSettings()
+		return m, nil
+	case "ctrl+c":
+		if time.Since(m.lastCtrlC) < 500*time.Millisecond {
+			return m, tea.Quit
+		}
+		m.lastCtrlC = time.Now()
+		return m, nil
+	case "ctrl+s":
+		m.toasts.Push(toast.Toast{Kind: toast.Success, Title: "Saved", Body: "(phase 2 writes to config.toml)"})
+		return m, nil
+	case "ctrl+t":
+		return m, func() tea.Msg { return CycleThemeMsg{} }
+	case "ctrl+p":
+		m.openPalette()
+		return m, nil
+	case "j", "down":
+		if m.settingsSel < len(settings.Categories)-1 {
+			m.settingsSel++
+		}
+	case "k", "up":
+		if m.settingsSel > 0 {
+			m.settingsSel--
+		}
+	case "g":
+		m.settingsSel = 0
+	case "G":
+		m.settingsSel = len(settings.Categories) - 1
+	case "?":
+		m.openHelp()
+	}
+	return m, nil
+}
+
 func (m *Model) selectInitial() {
 	sessions := sidebar.Flatten(m.store.All())
 	if len(sessions) == 0 {
@@ -491,6 +591,9 @@ func isLive(s session.Status) bool {
 func (m *Model) View() tea.View {
 	v := tea.NewView(m.render())
 	v.AltScreen = true
+	if m.mouseOn {
+		v.MouseMode = tea.MouseModeCellMotion
+	}
 	return v
 }
 
@@ -501,7 +604,12 @@ func (m *Model) render() string {
 	if m.screen == screenSplash {
 		return splash.Render(m.theme, m.styles, m.width, m.height)
 	}
-	base := m.renderMain()
+	var base string
+	if m.screen == screenSettings {
+		base = m.renderSettings()
+	} else {
+		base = m.renderMain()
+	}
 
 	// Composite overlays: toasts (bottom-right), then modal (centered).
 	layers := []*lipgloss.Layer{lipgloss.NewLayer(base).Z(0)}
@@ -622,6 +730,31 @@ func (m *Model) renderMain() string {
 		body = lipgloss.JoinHorizontal(lipgloss.Top, side, mainCol)
 	}
 	return lipgloss.JoinVertical(lipgloss.Left, hdr, body, ftr)
+}
+
+func (m *Model) renderSettings() string {
+	st := settings.State{
+		Selected:  m.settingsSel,
+		Theme:     m.theme,
+		ServerURL: "wss://prod.example.com",
+		Workdir:   "/Users/demon/projects/rag-broker",
+		MaxSess:   4,
+		Agent:     "codex",
+		Model:     "gpt-5-sonnet",
+		LogLevel:  "info",
+		LogFile:   "~/.local/state/daemonctl/daemonctl.log",
+		Version:   "v0.1.0",
+		Build:     "showcase",
+	}
+	body := settings.Render(m.theme, m.styles, st, m.width, m.height-1)
+	ftr := footer.Render(m.theme, m.styles, []footer.Hint{
+		{Key: "j/k", Desc: "move"},
+		{Key: "⌃s", Desc: "save"},
+		{Key: "⌃t", Desc: "cycle theme"},
+		{Key: "esc", Desc: "back"},
+		{Key: "?", Desc: "help"},
+	}, m.width)
+	return lipgloss.JoinVertical(lipgloss.Left, body, ftr)
 }
 
 func (m *Model) renderSessionHeader(sess *session.Session, w int) string {

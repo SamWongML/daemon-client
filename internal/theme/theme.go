@@ -6,8 +6,12 @@ import (
 	"charm.land/lipgloss/v2"
 )
 
+// Theme captures the full palette for one color scheme.
 type Theme struct {
 	Name   string
+	Label  string
+	IsDark bool
+
 	Bg     color.Color
 	Fg     color.Color
 	Dim    color.Color
@@ -32,34 +36,6 @@ type Theme struct {
 	StDisconnected  color.Color
 }
 
-func Dark() *Theme {
-	return &Theme{
-		Name:   "charm-dark",
-		Bg:     lipgloss.Color("#1a1a24"),
-		Fg:     lipgloss.Color("#e3e3ea"),
-		Dim:    lipgloss.Color("#7d7d8c"),
-		Muted:  lipgloss.Color("#4a4a58"),
-		Accent: lipgloss.Color("#ff79c6"),
-		Border: lipgloss.Color("#3a3a48"),
-
-		Success: lipgloss.Color("#50fa7b"),
-		Warn:    lipgloss.Color("#f1fa8c"),
-		Danger:  lipgloss.Color("#ff5555"),
-		Info:    lipgloss.Color("#8be9fd"),
-
-		StPending:       lipgloss.Color("#7d7d8c"),
-		StStarting:      lipgloss.Color("#bd93f9"),
-		StRunning:       lipgloss.Color("#8be9fd"),
-		StAwaitingInput: lipgloss.Color("#f1fa8c"),
-		StAwaitingPerm:  lipgloss.Color("#ffb86c"),
-		StIdle:          lipgloss.Color("#6272a4"),
-		StPaused:        lipgloss.Color("#bd93f9"),
-		StCompleted:     lipgloss.Color("#50fa7b"),
-		StFailed:        lipgloss.Color("#ff5555"),
-		StDisconnected:  lipgloss.Color("#ff5555"),
-	}
-}
-
 type Styles struct {
 	Base        lipgloss.Style
 	Dim         lipgloss.Style
@@ -68,27 +44,34 @@ type Styles struct {
 	HeaderDot   lipgloss.Style
 	GroupHeader lipgloss.Style
 
-	SidebarBase      lipgloss.Style
-	SidebarSelected  lipgloss.Style
-	SidebarTitle     lipgloss.Style
-	SidebarSubline   lipgloss.Style
-	SidebarActivity  lipgloss.Style
-	FocusBar         lipgloss.Style
+	SidebarBase     lipgloss.Style
+	SidebarSelected lipgloss.Style
+	SidebarTitle    lipgloss.Style
+	SidebarSubline  lipgloss.Style
+	SidebarActivity lipgloss.Style
+	FocusBar        lipgloss.Style
 
-	SessionTitle  lipgloss.Style
-	SessionMeta   lipgloss.Style
+	SessionTitle lipgloss.Style
+	SessionMeta  lipgloss.Style
 
 	TranscriptBase lipgloss.Style
 	UserBar        lipgloss.Style
 
-	InputBase    lipgloss.Style
-	InputMode    lipgloss.Style
+	InputBase        lipgloss.Style
+	InputMode        lipgloss.Style
 	InputPlaceholder lipgloss.Style
 
-	Footer       lipgloss.Style
-	FooterKey    lipgloss.Style
+	Footer    lipgloss.Style
+	FooterKey lipgloss.Style
 
-	TooSmall     lipgloss.Style
+	TooSmall lipgloss.Style
+
+	SettingsTitle    lipgloss.Style
+	SettingsCategory lipgloss.Style
+	SettingsActive   lipgloss.Style
+	SettingsField    lipgloss.Style
+	SettingsValue    lipgloss.Style
+	SettingsBorder   lipgloss.Style
 }
 
 func BuildStyles(t *Theme) *Styles {
@@ -121,6 +104,13 @@ func BuildStyles(t *Theme) *Styles {
 	s.FooterKey = lipgloss.NewStyle().Foreground(t.Accent)
 
 	s.TooSmall = lipgloss.NewStyle().Foreground(t.Warn).Bold(true)
+
+	s.SettingsTitle = lipgloss.NewStyle().Foreground(t.Accent).Bold(true)
+	s.SettingsCategory = lipgloss.NewStyle().Foreground(t.Fg)
+	s.SettingsActive = lipgloss.NewStyle().Foreground(t.Accent).Bold(true)
+	s.SettingsField = lipgloss.NewStyle().Foreground(t.Dim)
+	s.SettingsValue = lipgloss.NewStyle().Foreground(t.Fg)
+	s.SettingsBorder = lipgloss.NewStyle().Foreground(t.Border)
 	return s
 }
 
@@ -148,4 +138,32 @@ func StatusColor(t *Theme, name string) color.Color {
 		return t.StDisconnected
 	}
 	return t.Fg
+}
+
+// Registry is the ordered list of built-in themes. Cycling in the UI walks
+// this list. The first entry is the default.
+func Registry() []*Theme {
+	return []*Theme{Dark(), Light(), TokyoNightStorm(), GruvboxHard()}
+}
+
+// ByName returns the theme with the given name (case-sensitive), falling back
+// to the first registered theme if not found.
+func ByName(name string) *Theme {
+	for _, t := range Registry() {
+		if t.Name == name {
+			return t
+		}
+	}
+	return Registry()[0]
+}
+
+// Next returns the theme after `name` in the registry, wrapping around.
+func Next(name string) *Theme {
+	all := Registry()
+	for i, t := range all {
+		if t.Name == name {
+			return all[(i+1)%len(all)]
+		}
+	}
+	return all[0]
 }

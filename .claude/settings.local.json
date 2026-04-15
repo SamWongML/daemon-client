@@ -14,7 +14,13 @@
 			"Bash(git add:*)",
 			"Bash(git commit -m ':*)",
 			"Bash(git push:*)",
-			"Bash(gh pr create*)"
+			"Bash(gh pr create*)",
+			"WebSearch",
+			"WebFetch(domain:github.com)",
+			"WebFetch(domain:deepwiki.com)",
+			"WebFetch(domain:news.ycombinator.com)",
+			"WebFetch(domain:grahamhelton.com)",
+			"WebFetch(domain:p.janouch.name)"
 		]
 	}
 }

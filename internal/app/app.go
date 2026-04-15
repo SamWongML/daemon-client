@@ -61,7 +61,8 @@ type Model struct {
 	selected int
 	current  session.ID
 
-	focus FocusID
+	focus     FocusID
+	focusMain FocusGraph
 
 	inputBuf string
 	scrollTr int
@@ -117,6 +118,7 @@ func New(store *session.Store, eng *mock.Engine, opts Options) *Model {
 		store:           store,
 		engine:          eng,
 		focus:           FocusSidebar,
+		focusMain:       mainFocusGraph(),
 		autoFol:         true,
 		devMode:         opts.DevMode,
 		mouseOn:         opts.Mouse,
@@ -273,10 +275,10 @@ func (m *Model) handleKey(k tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	case "ctrl+t":
 		return m, func() tea.Msg { return CycleThemeMsg{} }
 	case "tab":
-		m.focus = m.focus.Next()
+		m.focus = m.focusMain.Next(m.focus)
 		return m, nil
 	case "shift+tab":
-		m.focus = m.focus.Prev()
+		m.focus = m.focusMain.Prev(m.focus)
 		return m, nil
 	case "ctrl+b":
 		m.sidebarCollapsed = !m.sidebarCollapsed
@@ -297,6 +299,26 @@ func (m *Model) handleKey(k tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m.handleTranscriptKey(key)
 	case FocusInput:
 		return m.handleInputKey(k, key)
+	case FocusHeaderSettings, FocusHeaderHelp:
+		return m.handleHeaderKey(key)
+	}
+	return m, nil
+}
+
+func (m *Model) handleHeaderKey(key string) (tea.Model, tea.Cmd) {
+	switch key {
+	case "left", "h":
+		m.focus = m.focusMain.Left(m.focus)
+	case "right", "l":
+		m.focus = m.focusMain.Right(m.focus)
+	case "enter", " ":
+		if m.focus == FocusHeaderSettings {
+			m.openSettings()
+		} else if m.focus == FocusHeaderHelp {
+			m.openHelp()
+		}
+	case "q":
+		return m, tea.Quit
 	}
 	return m, nil
 }
@@ -755,12 +777,20 @@ func (m *Model) renderMain() string {
 		totalCost += s.CostUSD
 	}
 
+	focusedBtn := ""
+	switch m.focus {
+	case FocusHeaderSettings:
+		focusedBtn = "settings"
+	case FocusHeaderHelp:
+		focusedBtn = "help"
+	}
 	hdr := header.Render(m.theme, m.styles, header.State{
 		ServerURL: "wss://prod.example.com",
 		Active:    active,
 		Max:       4,
 		TotalCost: totalCost,
 		Now:       time.Now(),
+		Focused:   focusedBtn,
 	}, l.Width)
 
 	side := ""
@@ -869,6 +899,8 @@ func (m *Model) hints() []footer.Hint {
 		return append([]footer.Hint{{Key: "j/k", Desc: "scroll"}, {Key: "i", Desc: "input"}}, base...)
 	case FocusInput:
 		return append([]footer.Hint{{Key: "esc", Desc: "exit input"}}, base...)
+	case FocusHeaderSettings, FocusHeaderHelp:
+		return append([]footer.Hint{{Key: "←/→", Desc: "move"}, {Key: "↵", Desc: "activate"}}, base...)
 	}
 	return base
 }

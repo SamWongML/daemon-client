@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"os"
 
@@ -12,6 +13,11 @@ import (
 )
 
 func main() {
+	devMode := flag.Bool("dev", false, "enable dev cheats (⌃⌥{p,q,t,c,f}) and extra diagnostics")
+	noMouse := flag.Bool("no-mouse", false, "disable mouse capture (keep native terminal selection)")
+	themeName := flag.String("theme", "charm-dark", "initial theme name (charm-dark, charm-light, tokyonight-storm, gruvbox-hard)")
+	flag.Parse()
+
 	store := session.NewStore()
 	engine := mock.New(store)
 	if err := engine.LoadFixtures(); err != nil {
@@ -19,7 +25,12 @@ func main() {
 		os.Exit(1)
 	}
 
-	m := app.New(store, engine)
+	m := app.New(store, engine, app.Options{
+		DevMode: *devMode,
+		Theme:   *themeName,
+		Mouse:   !*noMouse,
+	})
+
 	p := tea.NewProgram(m)
 	engine.SetProgram(p)
 

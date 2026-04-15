@@ -1,15 +1,20 @@
 {
-  "permissions": {
-    "allow": [
-      "Bash(go version:*)",
-      "Bash(go env:*)",
-      "Bash(go mod:*)",
-      "Bash(go get:*)",
-      "Bash(go build:*)",
-      "Bash(go vet:*)",
-      "Bash(/tmp/daemonctl)",
-      "Bash(echo \"exit=$?\")",
-      "Bash(go test:*)"
-    ]
-  }
+	"permissions": {
+		"allow": [
+			"Bash(go version:*)",
+			"Bash(go env:*)",
+			"Bash(go mod:*)",
+			"Bash(go get:*)",
+			"Bash(go build:*)",
+			"Bash(go vet:*)",
+			"Bash(/tmp/daemonctl)",
+			"Bash(echo \"exit=$?\")",
+			"Bash(go test:*)",
+			"Bash(git checkout:*)",
+			"Bash(git add:*)",
+			"Bash(git commit -m ':*)",
+			"Bash(git push:*)",
+			"Bash(gh pr create*)"
+		]
+	}
 }

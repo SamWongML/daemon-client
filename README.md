@@ -12,20 +12,21 @@
 
 ### What works today
 
-- Splash → main view routing
+- Splash → main view routing, with first-run detection routing to onboarding
+- **Onboarding wizard** (11 steps): welcome · server URL · auth token · workdir · agent binaries · max sessions · default agent + model · notifications · appearance · advanced · summary. Finish writes `$XDG_CONFIG_HOME/daemonctl/config.toml`; relaunch skips the wizard. `--reset-config` replays it.
 - Header · sidebar · session header · transcript · input · footer
 - Mock engine streaming markdown transcripts in real time
 - **Help overlay** (`?`), **command palette** (`⌃p`, 20 actions, fuzzy filter)
 - **Dialogs**: alert, confirm, question (1–9), permission
 - **Toasts**: bottom-right stack, 4 s TTL
-- **Themes**: 4 built-ins (`charm-dark`, `charm-light`, `tokyonight-storm`, `gruvbox-hard`) with live `⌃t` cycling and `--theme` flag
+- **Themes**: 4 built-ins (`charm-dark`, `charm-light`, `tokyonight-storm`, `gruvbox-hard`) with live `⌃t` cycling, `--theme` flag, and wizard-picked theme persisted to config
 - **Settings screen** (`⌃,` or palette): 8 categories, live theme preview, `⌃s` stub save
 - `--dev` flag gates dev cheats (off by default)
 - Responsive layout (compact / normal / wide breakpoints)
 
 ### What's next
 
-Onboarding wizard (M4) · auto theme via OSC 11 · Ghostty caps (OSC 9;4, 52, 8, 777) · settings inline editing · teatest golden files.
+Auto theme via OSC 11 · Ghostty caps (OSC 9;4, 52, 8, 777) · settings inline editing · teatest golden files.
 
 ---
 
@@ -52,9 +53,10 @@ go run ./cmd/daemonctl
 
 | Flag          | Default       | Effect                                            |
 | ------------- | ------------- | ------------------------------------------------- |
-| `--dev`       | `false`       | Enables `⌃⌥{p,q,t,c,f}` dev cheats                |
-| `--no-mouse`  | `false`       | Disables mouse capture (keep native terminal select) |
-| `--theme`     | `charm-dark`  | Initial theme — `charm-dark`, `charm-light`, `tokyonight-storm`, `gruvbox-hard` |
+| `--dev`          | `false`       | Enables `⌃⌥{p,q,t,c,f}` dev cheats                |
+| `--no-mouse`     | `false`       | Disables mouse capture (keep native terminal select) |
+| `--theme`        | `charm-dark`  | Initial theme — `charm-dark`, `charm-light`, `tokyonight-storm`, `gruvbox-hard` |
+| `--reset-config` | `false`       | Skip first-run detection and replay the onboarding wizard |
 
 Target runtime: **Ghostty ≥ 1.2** on macOS or Linux. It degrades gracefully on Alacritty, Kitty, iTerm2, WezTerm, and tmux-wrapped sessions.
 
@@ -142,6 +144,8 @@ internal/
   component/
     header/  sidebar/  transcript/  input/  footer/  splash/
     help/    palette/  toast/  dialog/      ← overlays
+    onboarding/            ← 11-step first-run wizard
+  config/                  TOML load/save for config.toml
   layout/                  breakpoints + pane rects
   theme/                   Theme, Styles, per-status colors
   keys/                    key.Binding registry

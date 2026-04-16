@@ -10,11 +10,12 @@ import (
 )
 
 type State struct {
-	ServerURL   string
-	Active      int
-	Max         int
-	TotalCost   float64
-	Now         time.Time
+	ServerURL    string
+	Active       int
+	Max          int
+	TotalCost    float64
+	Now          time.Time
+	TerminalName string // e.g. "ghostty", "kitty" — from ghostty.Caps.Label()
 }
 
 func Render(t *theme.Theme, st *theme.Styles, s State, w int) string {
@@ -29,9 +30,11 @@ func Render(t *theme.Theme, st *theme.Styles, s State, w int) string {
 		fg.Render(fmt.Sprintf("%d/%d sessions", s.Active, s.Max)),
 		dim.Render("⏱ " + s.Now.Format("15:04")),
 		dim.Render(fmt.Sprintf("$%.2f", s.TotalCost)),
-		dim.Render("[⚙]"),
-		dim.Render("[?]"),
 	}
+	if s.TerminalName != "" {
+		parts = append(parts, dim.Render(s.TerminalName))
+	}
+	parts = append(parts, dim.Render("[⚙]"), dim.Render("[?]"))
 
 	sep := dim.Render(" • ")
 	line := strings.Join(parts, sep)

@@ -24,9 +24,11 @@
 - `--dev` flag gates dev cheats (off by default)
 - Responsive layout (compact / normal / wide breakpoints)
 
+- **Ghostty caps**: terminal-capability detection (`internal/ghostty/`) with OSC 9;4 tab-bar progress, OSC 52 clipboard (`y` in transcript), OSC 8 file hyperlinks in session header, and OSC 777 desktop notifications on awaiting sessions. Auto-detects Ghostty, Kitty, WezTerm, iTerm, tmux; degrades silently elsewhere. Header shows terminal name badge.
+
 ### What's next
 
-Auto theme via OSC 11 · Ghostty caps (OSC 9;4, 52, 8, 777) · settings inline editing · teatest golden files.
+Auto theme via OSC 11 · settings inline editing · teatest golden files.
 
 ---
 

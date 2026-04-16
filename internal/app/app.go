@@ -22,6 +22,7 @@ import (
 	"github.com/demon/daemon-client/internal/component/toast"
 	"github.com/demon/daemon-client/internal/component/transcript"
 	"github.com/demon/daemon-client/internal/config"
+	"github.com/demon/daemon-client/internal/ghostty"
 	"github.com/demon/daemon-client/internal/layout"
 	"github.com/demon/daemon-client/internal/session"
 	"github.com/demon/daemon-client/internal/session/mock"
@@ -53,6 +54,7 @@ type Model struct {
 	screen        screen
 	width, height int
 
+	caps   ghostty.Caps
 	theme  *theme.Theme
 	styles *theme.Styles
 
@@ -97,7 +99,7 @@ type Model struct {
 }
 
 // New constructs the root Model. Pass Options{} for defaults.
-func New(store *session.Store, eng *mock.Engine, opts Options) *Model {
+func New(store *session.Store, eng *mock.Engine, caps ghostty.Caps, opts Options) *Model {
 	// Load any existing config up-front so theme/dev default choices can
 	// honor it. Missing file → Default() with UsedDefaults=true.
 	cfg, _ := config.Load()
@@ -112,6 +114,7 @@ func New(store *session.Store, eng *mock.Engine, opts Options) *Model {
 	t := theme.ByName(themeName)
 	m := &Model{
 		screen:          screenSplash,
+		caps:            caps,
 		theme:           t,
 		styles:          theme.BuildStyles(t),
 		store:           store,
@@ -187,6 +190,11 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case session.StatusMsg:
 		m.store.SetStatus(msg.ID, msg.Status)
+		if msg.Status == session.StatusAwaitingInput || msg.Status == session.StatusAwaitingPerm {
+			if sess := m.store.Get(msg.ID); sess != nil {
+				return m, ghostty.Notify(m.caps, "daemonctl", sess.Title+" needs attention")
+			}
+		}
 		return m, nil
 
 	case SetThemeMsg:
@@ -351,6 +359,12 @@ func (m *Model) handleTranscriptKey(key string) (tea.Model, tea.Cmd) {
 		m.autoFol = true
 	case "i":
 		m.focus = FocusInput
+	case "y":
+		if m.caps.OSC52Clipboard {
+			if sess := m.currentSession(); sess != nil && sess.Transcript != "" {
+				return m, tea.SetClipboard(sess.Transcript)
+			}
+		}
 	}
 	return m, nil
 }
@@ -665,7 +679,31 @@ func (m *Model) View() tea.View {
 	if m.mouseOn {
 		v.MouseMode = tea.MouseModeCellMotion
 	}
+	v.ProgressBar = m.sessionProgressBar()
 	return v
+}
+
+func (m *Model) sessionProgressBar() *tea.ProgressBar {
+	sessions := m.store.All()
+	if len(sessions) == 0 {
+		return nil
+	}
+	var completed, total int
+	var anyAwaiting, anyFailed, anyRunning bool
+	for _, s := range sessions {
+		total++
+		switch s.Status {
+		case session.StatusCompleted:
+			completed++
+		case session.StatusAwaitingInput, session.StatusAwaitingPerm:
+			anyAwaiting = true
+		case session.StatusFailed:
+			anyFailed = true
+		case session.StatusRunning, session.StatusStarting:
+			anyRunning = true
+		}
+	}
+	return ghostty.ProgressBar(m.caps, completed, total, anyAwaiting, anyFailed, anyRunning)
 }
 
 func (m *Model) render() string {
@@ -756,11 +794,12 @@ func (m *Model) renderMain() string {
 	}
 
 	hdr := header.Render(m.theme, m.styles, header.State{
-		ServerURL: "wss://prod.example.com",
-		Active:    active,
-		Max:       4,
-		TotalCost: totalCost,
-		Now:       time.Now(),
+		ServerURL:    "wss://prod.example.com",
+		Active:       active,
+		Max:          4,
+		TotalCost:    totalCost,
+		Now:          time.Now(),
+		TerminalName: m.caps.Label(),
 	}, l.Width)
 
 	side := ""
@@ -837,7 +876,11 @@ func (m *Model) renderSessionHeader(sess *session.Session, w int) string {
 	}
 	statusCol := theme.StatusColor(m.theme, sess.Status.Name())
 	title := m.styles.SessionTitle.Render("  " + sess.Title)
-	right := m.styles.SessionMeta.Render(fmt.Sprintf("%s • %s • $%.2f  ", sess.Agent, sess.Model, sess.CostUSD))
+	agent := sess.Agent
+	if m.caps.Hyperlinks && sess.Workdir != "" {
+		agent = ghostty.FileHyperlink(sess.Workdir, sess.Agent)
+	}
+	right := m.styles.SessionMeta.Render(fmt.Sprintf("%s • %s • $%.2f  ", agent, sess.Model, sess.CostUSD))
 	line1 := fitLine(title, right, w)
 	status := lipgloss.NewStyle().Foreground(statusCol).Bold(true).Render(sess.Status.Glyph() + " " + sess.Status.Name())
 	tokens := m.styles.SessionMeta.Render(fmt.Sprintf(" • %d / %d tokens", sess.Tokens, sess.Budget))

@@ -201,20 +201,19 @@ func For(w, h int) Breakpoint {
 
 ### 5.3 Layout math (Normal breakpoint)
 
+All chrome is borderless (§6.4.1). Separators are dim `─` / `│` rules that occupy 0 extra lines (they replace a padding line). The diagram below uses `─` and `│` for separators, **not** box-drawing borders:
+
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│  HEADER (height = 1, width = W)                                 │
-├─────────────┬───────────────────────────────────────────────────┤
-│             │  SESSION HEADER (h = 2)                           │
-│   SIDEBAR   ├───────────────────────────────────────────────────┤
-│             │                                                   │
-│  w = 28     │          TRANSCRIPT (flex, h = H - 8 - inputH)    │
-│  h = H - 2  │                                                   │
-│             ├───────────────────────────────────────────────────┤
-│             │  INPUT  (h = dynamic, min 3, max 10)              │
-├─────────────┴───────────────────────────────────────────────────┤
-│  FOOTER  (h = 1)                                                │
-└─────────────────────────────────────────────────────────────────┘
+ HEADER (h=1, w=W)
+─────────────────────────────────────────────────────────────────
+ SIDEBAR (w=28)  │  SESSION HEADER (h=1)
+                 │ ─────────────────────────────────────────────
+                 │  TRANSCRIPT (flex)
+                 │
+                 │ ─────────────────────────────────────────────
+                 │  INPUT (h=dynamic, min 3, max 10)
+─────────────────────────────────────────────────────────────────
+ FOOTER (h=1, w=W)
 ```
 
 Formula:
@@ -222,12 +221,13 @@ Formula:
 ```
 headerH = 1
 footerH = 1
-sessionHeaderH = 2
+sessionHeaderH = 1      // was 2 — now single-line per §7.3.3
+separatorH = 0           // dim rules are drawn inside padding, not additional rows
 sidebarW = 28 (normal) | min(36, W*22/100) (wide) | 0 (compact-collapsed)
 sidebarH = H - headerH - footerH
 
-mainX = sidebarW
-mainW = W - sidebarW
+mainX = sidebarW + 1     // +1 for the vertical │ separator
+mainW = W - sidebarW - 1
 inputH = clamp(m.input.LineCount() + 2, 3, 10)
 transcriptH = H - headerH - footerH - sessionHeaderH - inputH
 ```
@@ -786,13 +786,30 @@ const (
 
 Each status has:
 
-| Field      | Purpose                                              |
-| ---------- | ---------------------------------------------------- |
-| `Glyph`    | Nerd-font glyph + ASCII fallback                     |
-| `Color`    | via `Theme.St*`                                      |
-| `Label`    | human-readable                                       |
-| `Pulse`    | bool — should the glyph pulse (awaiting states only) |
-| `Priority` | int — for sidebar grouping                           |
+| Field      | Purpose                                                                      |
+| ---------- | ---------------------------------------------------------------------------- |
+| `Glyph`    | Single-cell dot from the §6.4.2 vocabulary — **no nerd-font / emoji icons** |
+| `Color`    | via `Theme.St*`                                                              |
+| `Label`    | human-readable lowercase label (e.g. `running`, `awaiting input`)            |
+| `Pulse`    | bool — should the glyph pulse (awaiting + starting states only)              |
+| `Severity` | int — descending sort weight for within-bucket sidebar ordering (§7.3.2)     |
+
+Concrete glyph + severity assignments:
+
+| Status             | Glyph | Pulse | Severity | Notes                                |
+| ------------------ | ----- | ----- | -------- | ------------------------------------ |
+| `StatusPending`    | `◐`   | yes   | 30       |                                      |
+| `StatusStarting`   | `◐`   | yes   | 35       | may also use `⋯` spinner variant    |
+| `StatusRunning`    | `●`   | no    | 40       |                                      |
+| `StatusAwaitingInput` | `!` | yes   | 90       |                                      |
+| `StatusAwaitingPerm`  | `!` | yes   | 100      | highest — demands immediate response |
+| `StatusIdle`       | `○`   | no    | 20       |                                      |
+| `StatusPaused`     | `○`   | no    | 15       |                                      |
+| `StatusCompleted`  | `✓`   | no    | 5        |                                      |
+| `StatusFailed`     | `×`   | no    | 80       |                                      |
+| `StatusDisconnected` | `×` | no    | 70       |                                      |
+
+The old `Priority` field (used for status-group ordering) is replaced by `Severity`. Sidebar no longer groups by status — it groups by time bucket and sorts within each bucket by severity descending (§7.3.2).
 
 Pulse animation: 1 Hz sine, alpha 0.5 → 1.0. Use a global `tea.Tick(50ms)` that emits a `PulseTickMsg{Phase float64}` consumed by all pulsing components.
 
@@ -802,14 +819,17 @@ Pulse animation: 1 Hz sine, alpha 0.5 → 1.0. Use a global `tea.Tick(50ms)` tha
 
 Kept cheap and purposeful. Everything is driven by a single global `tea.Tick(50ms)` timer emitting `FrameMsg{TickN int64}`. Components read `TickN` and compute their frame without scheduling their own tickers.
 
+> **Aesthetic cross-ref:** all visual chrome follows §6.4. In particular: no box borders on persistent panes, status glyphs from the §6.4.2 dot vocabulary, one accent color, body text in foreground ramp only.
+
 1. **Splash logo shimmer** — hue shift, 8 fps (every 3rd frame).
-2. **Pulse** (awaiting states) — 1 Hz sine on foreground alpha.
-3. **Spinner** (starting state) — `bubbles/spinner` with custom glyphs `⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏`, 12 fps.
+2. **Pulse** (awaiting / starting states) — 1 Hz sine on foreground alpha. Applies to glyph `!` and `◐` only.
+3. **Spinner** (starting state) — `bubbles/spinner` with custom glyphs `⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏`, 12 fps. Used as an alternative to `◐` when the session header shows starting state.
 4. **Toast slide** — `x` translates from `width+3` to final position over 150ms, ease-out.
-5. **Modal fade** — backdrop from `0` to `dim(0.4)` over 100ms.
-6. **Sidebar collapse/expand** — `width` animates over 150ms.
-7. **Filter bar slide-down** — `height 0 → 3` over 120ms.
+5. **Modal fade** — backdrop from `0` to `dim(0.4)` over 100ms. Applies only to modal overlays that have borders (§6.4.1).
+6. **Sidebar collapse/expand** — `width 28 → 0` over 150ms, with the vertical `│` separator disappearing on the last frame.
+7. **Filter bar slide-down** — `height 0 → 1` over 120ms (was 0→3 when the filter had a border box — now borderless, single line).
 8. **Focus-change accent bar** — 1 frame flash bright, then settle.
+9. **Footer calm rotation** — gentle 8s cycle between hint strings when idle (§7.3.6). No flicker — cross-fade by dimming the outgoing string over 2 frames, then brightening the incoming.
 
 No easing library needed; write a tiny `ease.OutCubic(t float64) float64` helper.
 

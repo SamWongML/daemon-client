@@ -596,7 +596,8 @@ func (m *Model) Render(t *theme.Theme, st *theme.Styles) string {
 	parts = append(parts, "", body)
 	if m.err != "" {
 		parts = append(parts,
-			lipgloss.NewStyle().Foreground(t.Danger).Render("  ! "+m.err))
+			lipgloss.NewStyle().Foreground(t.Danger).Render("  ! ")+
+				lipgloss.NewStyle().Foreground(t.Fg).Render(m.err))
 	}
 	block := lipgloss.JoinVertical(lipgloss.Left, parts...)
 
@@ -843,7 +844,7 @@ func (m *Model) renderSummary(t *theme.Theme, st *theme.Styles) string {
 
 func kvLine(st *theme.Styles, t *theme.Theme, k, v string) string {
 	key := st.Dim.Render(pad(k+" =", 22))
-	val := lipgloss.NewStyle().Foreground(t.Info).Render(v)
+	val := lipgloss.NewStyle().Foreground(t.Fg).Render(v)
 	return "  " + key + " " + val
 }
 

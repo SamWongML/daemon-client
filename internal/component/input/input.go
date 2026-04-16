@@ -17,7 +17,6 @@ func Render(t *theme.Theme, st *theme.Styles, s State, w, h int) string {
 	if w <= 0 || h <= 0 {
 		return ""
 	}
-	border := lipgloss.NewStyle().Foreground(t.Border)
 	glyph := lipgloss.NewStyle().Foreground(t.Accent).Bold(true).Render("> ")
 
 	content := s.Buffer
@@ -31,26 +30,21 @@ func Render(t *theme.Theme, st *theme.Styles, s State, w, h int) string {
 
 	inner := glyph + content
 	lines := strings.Split(inner, "\n")
-	for len(lines) < h-2 {
+	for len(lines) < h {
 		lines = append(lines, "")
 	}
-	if len(lines) > h-2 {
-		lines = lines[:h-2]
+	if len(lines) > h {
+		lines = lines[:h]
 	}
 
 	bar := " "
 	if s.Focused {
 		bar = lipgloss.NewStyle().Foreground(t.Accent).Render("▌")
 	}
-	top := border.Render("╭" + strings.Repeat("─", max(0, w-2)) + "╮")
-	bot := border.Render("╰" + strings.Repeat("─", max(0, w-2)) + "╯")
-	body := make([]string, len(lines))
 	for i, l := range lines {
-		left := bar + border.Render("│")
-		right := border.Render("│")
-		body[i] = left + padRight(l, max(0, w-3)) + right
+		lines[i] = bar + padRight(l, max(0, w-1))
 	}
-	return strings.Join(append([]string{top}, append(body, bot)...), "\n")
+	return strings.Join(lines, "\n")
 }
 
 func padRight(s string, w int) string {

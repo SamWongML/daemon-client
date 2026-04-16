@@ -87,7 +87,7 @@ func BuildStyles(t *Theme) *Styles {
 	s.SidebarSelected = lipgloss.NewStyle().Foreground(t.Fg).Bold(true)
 	s.SidebarTitle = lipgloss.NewStyle().Foreground(t.Fg)
 	s.SidebarSubline = lipgloss.NewStyle().Foreground(t.Dim)
-	s.SidebarActivity = lipgloss.NewStyle().Foreground(t.Info).Italic(true)
+	s.SidebarActivity = lipgloss.NewStyle().Foreground(t.Muted).Italic(true)
 	s.FocusBar = lipgloss.NewStyle().Foreground(t.Accent)
 
 	s.SessionTitle = lipgloss.NewStyle().Foreground(t.Fg).Bold(true)
@@ -155,6 +155,18 @@ func ByName(name string) *Theme {
 		}
 	}
 	return Registry()[0]
+}
+
+// IsAuto reports whether the name represents the auto-detect sentinel.
+func IsAuto(name string) bool { return name == "auto" }
+
+// ResolveAuto picks charm-dark or charm-light based on a dark-background flag.
+// Call this only when the config value is "auto".
+func ResolveAuto(dark bool) *Theme {
+	if dark {
+		return ByName("charm-dark")
+	}
+	return ByName("charm-light")
 }
 
 // Next returns the theme after `name` in the registry, wrapping around.

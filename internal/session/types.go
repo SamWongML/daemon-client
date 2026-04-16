@@ -48,55 +48,68 @@ func (s Status) Name() string {
 	return "unknown"
 }
 
-// Priority controls sidebar grouping order (lower = higher priority).
-func (s Status) Priority() int {
+// Severity returns a descending sort weight for within-bucket sidebar ordering
+// (§7.3.2 / §10). Higher values surface first.
+func (s Status) Severity() int {
 	switch s {
 	case StatusAwaitingPerm:
-		return 0
+		return 100
 	case StatusAwaitingInput:
-		return 1
-	case StatusRunning:
-		return 2
-	case StatusStarting:
-		return 3
-	case StatusIdle:
-		return 4
-	case StatusPaused:
-		return 5
-	case StatusPending:
-		return 6
-	case StatusCompleted:
-		return 7
+		return 90
 	case StatusFailed:
-		return 8
+		return 80
 	case StatusDisconnected:
-		return 9
+		return 70
+	case StatusRunning:
+		return 40
+	case StatusStarting:
+		return 35
+	case StatusPending:
+		return 30
+	case StatusIdle:
+		return 20
+	case StatusPaused:
+		return 15
+	case StatusCompleted:
+		return 5
 	}
-	return 99
+	return 0
 }
 
+// Glyph returns a single-cell dot from the §6.4.2 vocabulary.
 func (s Status) Glyph() string {
 	switch s {
 	case StatusRunning:
-		return "⟳"
+		return "●"
 	case StatusStarting:
-		return "◌"
+		return "◐"
+	case StatusPending:
+		return "◐"
 	case StatusAwaitingInput:
-		return "?"
+		return "!"
 	case StatusAwaitingPerm:
-		return "⚠"
+		return "!"
 	case StatusIdle:
-		return "◦"
+		return "○"
 	case StatusPaused:
-		return "❚❚"
+		return "○"
 	case StatusCompleted:
 		return "✓"
 	case StatusFailed:
-		return "✗"
+		return "×"
 	case StatusDisconnected:
-		return "∅"
+		return "×"
 	}
-	return "·"
+	return "○"
+}
+
+// Pulse returns true if the glyph should animate at 1 Hz.
+func (s Status) Pulse() bool {
+	switch s {
+	case StatusPending, StatusStarting, StatusAwaitingInput, StatusAwaitingPerm:
+		return true
+	}
+	return false
 }
 
 func ParseStatus(s string) Status {

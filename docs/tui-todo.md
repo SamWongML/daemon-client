@@ -6,44 +6,44 @@ Legend: `[x]` done · `[~]` partial · `[ ]` not started.
 
 ## Milestones
 
-- [ ] **M0 — Aesthetic refresh** ⚠️ URGENT — do this before any other milestone work
+- [x] **M0 — Aesthetic refresh** ⚠️ URGENT — do this before any other milestone work
   > Implements spec §6.4 (visual language), revised §7.3.1–7.3.6, and revised §10.
   > Rationale: the current build is too busy — boxed borders, nerd-font icons, status-grouped sidebar, and a dense header all fight for attention. This pass strips the chrome to match modern Charm/opencode aesthetics (dot glyphs, left-accent-bar selection, time-bucketed sidebar, sparse header). See spec for design references.
 
-  - [ ] **M0.1 — Strip borders** ([internal/component/header/header.go](../internal/component/header/header.go), [sidebar.go](../internal/component/sidebar/sidebar.go), [footer.go](../internal/component/footer/footer.go), [input.go](../internal/component/input/input.go), [transcript.go](../internal/component/transcript/transcript.go))
-    - [ ] Remove all `lipgloss.RoundedBorder()` / `NormalBorder()` from persistent panes
-    - [ ] Add single vertical `│` separator between sidebar and main pane (dim `theme.Border`)
-    - [ ] Add dim `─` horizontal rules: header↔body, body↔footer, session-header↔transcript
-    - [ ] Keep `RoundedBorder()` only on: command palette, help overlay, dialog modals
-  - [ ] **M0.2 — Status glyph swap** ([internal/session/types.go](../internal/session/types.go) or equivalent)
-    - [ ] Replace all nerd-font / emoji status glyphs with §6.4.2 dot vocabulary (`●` `◐` `○` `✓` `×` `!` `⋯`)
-    - [ ] Add `Severity int` field to status model for sidebar sort order
-    - [ ] Remove old `Priority` field (was used for status-group ordering)
-  - [ ] **M0.3 — Sidebar redesign** ([internal/component/sidebar/sidebar.go](../internal/component/sidebar/sidebar.go))
-    - [ ] Replace status-group ordering with time-bucket ordering (`active > today > this week > older > archive`)
-    - [ ] Implement severity-descending secondary sort within each bucket
-    - [ ] Reduce items to 2-line comfortable / 1-line compact (drop old 3-line row with activity text)
-    - [ ] Replace boxed `+ New session` with borderless accent-bar row
-    - [ ] Replace boxed filter bar with single-line `/` prefix row (no border)
-    - [ ] Attention-state rows (`!` glyph) get persistent left accent bar in `theme.Warn`
-    - [ ] Archive bucket rows render at ~40% opacity
-  - [ ] **M0.4 — Header simplification** ([internal/component/header/header.go](../internal/component/header/header.go))
-    - [ ] Strip header to: `▌daemonctl   ● agent · model` (left) + `[⚙] [?]` (right)
-    - [ ] Remove server URL, session count, clock, cost from header
-  - [ ] **M0.5 — Footer status line** ([internal/component/footer/footer.go](../internal/component/footer/footer.go))
-    - [ ] Add right-zone to footer: session count, aggregate cost, clock (HH:MM)
-    - [ ] Implement calm-state hint rotation (8s cycle when idle)
-    - [ ] Right-zone items render in `theme.Dim`, drop right-to-left on overflow
-  - [ ] **M0.6 — Session header collapse** ([internal/component/transcript/transcript.go](../internal/component/transcript/transcript.go) or session header component)
-    - [ ] Collapse session header from 2 lines to 1 line per revised §7.3.3
-    - [ ] Move token bar inline, 12-col `WithSolidFill`, color-ramped by usage %
-  - [ ] **M0.7 — Layout math update** ([internal/layout/rect.go](../internal/layout/rect.go))
-    - [ ] Update `LayoutRect` to use `sessionHeaderH = 1` (was 2)
-    - [ ] Account for `mainX = sidebarW + 1` (separator column)
-  - [ ] **M0.8 — Color discipline audit** ([internal/theme/theme.go](../internal/theme/theme.go), all component `View()` methods)
-    - [ ] Verify each theme has exactly one accent hue
-    - [ ] Audit all `View()` methods: body text must use only `Fg` / `Muted` / `Dim` ramp — no accent on body text
-    - [ ] Status colors (`Success`, `Warn`, `Danger`, `Info`) appear only on glyphs + dialog severity
+  - [x] **M0.1 — Strip borders** ([internal/component/header/header.go](../internal/component/header/header.go), [sidebar.go](../internal/component/sidebar/sidebar.go), [footer.go](../internal/component/footer/footer.go), [input.go](../internal/component/input/input.go), [transcript.go](../internal/component/transcript/transcript.go))
+    - [x] Remove all `lipgloss.RoundedBorder()` / `NormalBorder()` from persistent panes
+    - [x] Add single vertical `│` separator between sidebar and main pane (dim `theme.Border`)
+    - [x] Add dim `─` horizontal rules: header↔body, body↔footer, session-header↔transcript
+    - [x] Keep `RoundedBorder()` only on: command palette, help overlay, dialog modals
+  - [x] **M0.2 — Status glyph swap** ([internal/session/types.go](../internal/session/types.go) or equivalent)
+    - [x] Replace all nerd-font / emoji status glyphs with §6.4.2 dot vocabulary (`●` `◐` `○` `✓` `×` `!` `⋯`)
+    - [x] Add `Severity int` field to status model for sidebar sort order
+    - [x] Remove old `Priority` field (was used for status-group ordering)
+  - [x] **M0.3 — Sidebar redesign** ([internal/component/sidebar/sidebar.go](../internal/component/sidebar/sidebar.go))
+    - [x] Replace status-group ordering with time-bucket ordering (`active > today > this week > older > archive`)
+    - [x] Implement severity-descending secondary sort within each bucket
+    - [x] Reduce items to 2-line comfortable / 1-line compact (drop old 3-line row with activity text)
+    - [x] Replace boxed `+ New session` with borderless accent-bar row
+    - [x] Replace boxed filter bar with single-line `/` prefix row (no border)
+    - [x] Attention-state rows (`!` glyph) get persistent left accent bar in `theme.Warn`
+    - [x] Archive bucket rows render at ~40% opacity
+  - [x] **M0.4 — Header simplification** ([internal/component/header/header.go](../internal/component/header/header.go))
+    - [x] Strip header to: `▌daemonctl   ● agent · model` (left) + `[⚙] [?]` (right)
+    - [x] Remove server URL, session count, clock, cost from header
+  - [x] **M0.5 — Footer status line** ([internal/component/footer/footer.go](../internal/component/footer/footer.go))
+    - [x] Add right-zone to footer: session count, aggregate cost, clock (HH:MM)
+    - [~] Implement calm-state hint rotation (8s cycle when idle)
+    - [x] Right-zone items render in `theme.Dim`, drop right-to-left on overflow
+  - [x] **M0.6 — Session header collapse** ([internal/component/transcript/transcript.go](../internal/component/transcript/transcript.go) or session header component)
+    - [x] Collapse session header from 2 lines to 1 line per revised §7.3.3
+    - [x] Move token bar inline, 12-col `WithSolidFill`, color-ramped by usage %
+  - [x] **M0.7 — Layout math update** ([internal/layout/rect.go](../internal/layout/rect.go))
+    - [x] Update `LayoutRect` to use `sessionHeaderH = 1` (was 2)
+    - [x] Account for `mainX = sidebarW + 1` (separator column)
+  - [x] **M0.8 — Color discipline audit** ([internal/theme/theme.go](../internal/theme/theme.go), all component `View()` methods)
+    - [x] Verify each theme has exactly one accent hue
+    - [x] Audit all `View()` methods: body text must use only `Fg` / `Muted` / `Dim` ramp — no accent on body text
+    - [x] Status colors (`Success`, `Warn`, `Danger`, `Info`) appear only on glyphs + dialog severity
 
 - [x] **M1 — Skeleton + layout**
   - [x] `appModel` root + router ([internal/app/app.go](../internal/app/app.go))
@@ -51,11 +51,11 @@ Legend: `[x]` done · `[~]` partial · `[ ]` not started.
   - [x] `LayoutRect` + size propagation ([internal/layout/rect.go](../internal/layout/rect.go))
   - [x] Placeholder screens wired through router
 
-- [~] **M2 — Theme + styles**
+- [x] **M2 — Theme + styles**
   - [x] `Theme` struct + `Styles` cache ([internal/theme/theme.go](../internal/theme/theme.go))
   - [x] Built-ins: charm-dark, charm-light, tokyonight-storm, gruvbox-hard
   - [x] Live `SetThemeMsg` switching
-  - [ ] `theme: "auto"` via OSC 11 background-luminance detection
+  - [x] `theme: "auto"` via OSC 11 background-luminance detection ([internal/terminal/background.go](../internal/terminal/background.go))
 
 - [~] **M3 — Splash**
   - [x] Animated ASCII logo + progress bar ([internal/component/splash/splash.go](../internal/component/splash/splash.go))

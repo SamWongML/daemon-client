@@ -25,6 +25,7 @@ import (
 	"github.com/demon/daemon-client/internal/layout"
 	"github.com/demon/daemon-client/internal/session"
 	"github.com/demon/daemon-client/internal/session/mock"
+	"github.com/demon/daemon-client/internal/terminal"
 	"github.com/demon/daemon-client/internal/theme"
 )
 
@@ -110,7 +111,7 @@ func New(store *session.Store, eng *mock.Engine, opts Options) *Model {
 			themeName = cfg.Theme
 		}
 	}
-	t := theme.ByName(themeName)
+	t := resolveTheme(themeName)
 	m := &Model{
 		screen:          screenSplash,
 		theme:           t,
@@ -153,6 +154,18 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.onboard != nil {
 			m.onboard.SetSize(m.width, m.height)
 		}
+		// Force a full repaint. Without this, the renderer's ticker can
+		// flush the stale (pre-resize) view before Update+View produce
+		// new content, consuming the Erase flag and leaving the screen
+		// partially painted — especially visible when enlarging.
+		return m, tea.ClearScreen
+
+	case tea.FocusMsg:
+		// Terminal regained focus — returning nil is enough to trigger a
+		// re-render with the current (possibly updated) dimensions.
+		return m, nil
+
+	case tea.BlurMsg:
 		return m, nil
 
 	case clockTickMsg:
@@ -168,7 +181,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case onboarding.DoneMsg:
 		m.cfg = msg.Cfg
 		// Apply theme choice from onboarding immediately.
-		m.setTheme(theme.ByName(m.cfg.Theme))
+		m.setTheme(resolveTheme(m.cfg.Theme))
 		m.onboard = nil
 		m.screen = screenMain
 		m.selectInitial()
@@ -192,7 +205,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case SetThemeMsg:
-		m.setTheme(theme.ByName(msg.Name))
+		m.setTheme(resolveTheme(msg.Name))
 		return m, nil
 
 	case CycleThemeMsg:
@@ -675,6 +688,16 @@ func (m *Model) selectInitial() {
 	}
 }
 
+// resolveTheme maps a theme name (including "auto") to a concrete Theme.
+// When name is "auto", it queries the terminal's background luminance via
+// OSC 11 and picks charm-dark or charm-light accordingly.
+func resolveTheme(name string) *theme.Theme {
+	if theme.IsAuto(name) {
+		return theme.ResolveAuto(terminal.IsDarkBackground())
+	}
+	return theme.ByName(name)
+}
+
 func isLive(s session.Status) bool {
 	return s == session.StatusRunning || s == session.StatusAwaitingInput || s == session.StatusAwaitingPerm || s == session.StatusStarting
 }
@@ -682,8 +705,14 @@ func isLive(s session.Status) bool {
 // --- View ---
 
 func (m *Model) View() tea.View {
-	v := tea.NewView(m.render())
+	content := m.render()
+	// Ensure content fills the full terminal to prevent stale artifacts on resize.
+	if m.width > 0 && m.height > 0 {
+		content = lipgloss.Place(m.width, m.height, lipgloss.Left, lipgloss.Top, content)
+	}
+	v := tea.NewView(content)
 	v.AltScreen = true
+	v.ReportFocus = true
 	if m.mouseOn {
 		v.MouseMode = tea.MouseModeCellMotion
 	}
@@ -784,13 +813,15 @@ func (m *Model) renderMain() string {
 	case FocusHeaderHelp:
 		focusedBtn = "help"
 	}
+	// Determine agent/model from current session or fallback
+	hdrAgent, hdrModel := "codex", "gpt-5-sonnet"
+	if sess := m.currentSession(); sess != nil {
+		hdrAgent, hdrModel = sess.Agent, sess.Model
+	}
 	hdr := header.Render(m.theme, m.styles, header.State{
-		ServerURL: "wss://prod.example.com",
-		Active:    active,
-		Max:       4,
-		TotalCost: totalCost,
-		Now:       time.Now(),
-		Focused:   focusedBtn,
+		Agent:   hdrAgent,
+		Model:   hdrModel,
+		Focused: focusedBtn,
 	}, l.Width)
 
 	side := ""
@@ -799,6 +830,7 @@ func (m *Model) renderMain() string {
 			Sessions: sessions,
 			Selected: m.selected,
 			Focused:  m.focus == FocusSidebar,
+			Now:      time.Now(),
 		}, l.Sidebar.W, l.Sidebar.H)
 	}
 
@@ -824,16 +856,30 @@ func (m *Model) renderMain() string {
 		Placeholder: "ask the agent…",
 	}, l.Input.W, l.Input.H)
 
-	ftr := footer.Render(m.theme, m.styles, m.hints(), l.Width)
+	ftr := footer.Render(m.theme, m.styles, m.hints(), footer.Status{
+		Active:    active,
+		Max:       4,
+		TotalCost: totalCost,
+		Now:       time.Now(),
+	}, l.Width)
 
-	mainCol := lipgloss.JoinVertical(lipgloss.Left, sessHdr, tr, inp)
+	dimRule := lipgloss.NewStyle().Foreground(m.theme.Border)
+	hrule := dimRule.Render(strings.Repeat("─", l.Width))
+	mainRule := dimRule.Render(strings.Repeat("─", l.Transcript.W))
+
+	mainCol := lipgloss.JoinVertical(lipgloss.Left, sessHdr, mainRule, tr, inp)
 	var body string
 	if side == "" {
 		body = mainCol
 	} else {
-		body = lipgloss.JoinHorizontal(lipgloss.Top, side, mainCol)
+		sepLines := make([]string, l.Sidebar.H)
+		for i := range sepLines {
+			sepLines[i] = dimRule.Render("│")
+		}
+		sep := strings.Join(sepLines, "\n")
+		body = lipgloss.JoinHorizontal(lipgloss.Top, side, sep, mainCol)
 	}
-	return lipgloss.JoinVertical(lipgloss.Left, hdr, body, ftr)
+	return lipgloss.JoinVertical(lipgloss.Left, hdr, hrule, body, hrule, ftr)
 }
 
 func (m *Model) renderSettings() string {
@@ -857,22 +903,76 @@ func (m *Model) renderSettings() string {
 		{Key: "⌃t", Desc: "cycle theme"},
 		{Key: "esc", Desc: "back"},
 		{Key: "?", Desc: "help"},
-	}, m.width)
+	}, footer.Status{Now: time.Now()}, m.width)
 	return lipgloss.JoinVertical(lipgloss.Left, body, ftr)
 }
 
 func (m *Model) renderSessionHeader(sess *session.Session, w int) string {
 	if sess == nil {
-		return m.styles.Dim.Render("  (no session selected)") + "\n"
+		return m.styles.Dim.Render(" (no session selected)")
 	}
 	statusCol := theme.StatusColor(m.theme, sess.Status.Name())
-	title := m.styles.SessionTitle.Render("  " + sess.Title)
-	right := m.styles.SessionMeta.Render(fmt.Sprintf("%s • %s • $%.2f  ", sess.Agent, sess.Model, sess.CostUSD))
-	line1 := fitLine(title, right, w)
-	status := lipgloss.NewStyle().Foreground(statusCol).Bold(true).Render(sess.Status.Glyph() + " " + sess.Status.Name())
-	tokens := m.styles.SessionMeta.Render(fmt.Sprintf(" • %d / %d tokens", sess.Tokens, sess.Budget))
-	line2 := "  " + status + tokens
-	return line1 + "\n" + line2
+	glyph := lipgloss.NewStyle().Foreground(statusCol).Render(sess.Status.Glyph())
+	title := m.styles.SessionTitle.Render(" " + truncSessionTitle(sess.Title, max(0, w-40)))
+	elapsed := m.styles.SessionMeta.Render("  " + formatElapsed(sess.StartedAt))
+
+	// Token usage + inline 12-col context-window bar
+	usedK := fmt.Sprintf("%.1fk", float64(sess.Tokens)/1000)
+	budgetK := fmt.Sprintf("%dk", sess.Budget/1000)
+	tokenLabel := m.styles.SessionMeta.Render("  " + usedK + "/" + budgetK + " ")
+	bar := renderTokenBar(m.theme, sess.Tokens, sess.Budget, 12)
+
+	left := " " + glyph + title + elapsed
+	right := tokenLabel + bar + " "
+	return fitLine(left, right, w)
+}
+
+func renderTokenBar(t *theme.Theme, used, budget, barW int) string {
+	if budget <= 0 {
+		budget = 1
+	}
+	pct := float64(used) / float64(budget)
+	if pct > 1 {
+		pct = 1
+	}
+	filled := int(pct * float64(barW))
+	if filled > barW {
+		filled = barW
+	}
+	barColor := t.Accent
+	if pct > 0.95 {
+		barColor = t.Danger
+	} else if pct > 0.80 {
+		barColor = t.Warn
+	}
+	on := lipgloss.NewStyle().Foreground(barColor).Render(strings.Repeat("▓", filled))
+	off := lipgloss.NewStyle().Foreground(t.Dim).Render(strings.Repeat("░", barW-filled))
+	return on + off
+}
+
+func truncSessionTitle(s string, w int) string {
+	if w <= 0 {
+		return ""
+	}
+	r := []rune(s)
+	if len(r) <= w {
+		return s
+	}
+	if w < 2 {
+		return string(r[:w])
+	}
+	return string(r[:w-1]) + "…"
+}
+
+func formatElapsed(t time.Time) string {
+	d := time.Since(t)
+	if d < time.Minute {
+		return fmt.Sprintf("%ds", int(d.Seconds()))
+	}
+	if d < time.Hour {
+		return fmt.Sprintf("%dm%02ds", int(d.Minutes()), int(d.Seconds())%60)
+	}
+	return fmt.Sprintf("%dh%02dm", int(d.Hours()), int(d.Minutes())%60)
 }
 
 func fitLine(left, right string, w int) string {

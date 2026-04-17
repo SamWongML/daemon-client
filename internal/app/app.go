@@ -2,6 +2,7 @@ package app
 
 import (
 	"fmt"
+	"math"
 	"math/rand"
 	"strings"
 	"time"
@@ -67,12 +68,15 @@ type Model struct {
 	focus     FocusID
 	focusMain FocusGraph
 
-	inputBuf string
-	scrollTr int
-	autoFol  bool
+	inputBuf   string
+	scrollTr   int
+	autoFol    bool
+	pulsePhase float64
 
 	sidebarCollapsed bool
+	compactDensity   bool
 
+	wsStatus  header.WSStatus // dev cheat toggleable
 	lastCtrlC time.Time
 
 	// overlays
@@ -141,13 +145,20 @@ func (m *Model) seedToasts() {
 }
 
 func (m *Model) Init() tea.Cmd {
-	return tea.Batch(splash.Tick(), clockTick())
+	return tea.Batch(splash.Tick(), clockTick(), pulseTick())
 }
 
 type clockTickMsg struct{}
 
 func clockTick() tea.Cmd {
 	return tea.Tick(time.Second, func(time.Time) tea.Msg { return clockTickMsg{} })
+}
+
+func pulseTick() tea.Cmd {
+	return tea.Tick(50*time.Millisecond, func(time.Time) tea.Msg {
+		phase := math.Sin(float64(time.Now().UnixMilli())/1000.0*2*math.Pi)*0.5 + 0.5
+		return PulseTickMsg{Phase: phase}
+	})
 }
 
 func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -174,6 +185,10 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case clockTickMsg:
 		m.toasts.Tick(time.Now())
 		return m, clockTick()
+
+	case PulseTickMsg:
+		m.pulsePhase = msg.Phase
+		return m, pulseTick()
 
 	case splash.DoneMsg:
 		if m.screen == screenSplash {
@@ -219,6 +234,14 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case CycleThemeMsg:
 		m.setTheme(theme.Next(m.theme.Name))
 		m.toasts.Push(toast.Toast{Kind: toast.Info, Title: "Theme", Body: m.theme.Label})
+		return m, nil
+
+	case PanicMsg:
+		m.toasts.Push(toast.Toast{Kind: toast.Error, Title: "Panic recovered", Body: fmt.Sprintf("%v", msg.Err)})
+		return m, nil
+
+	case mock.PanicEvent:
+		m.toasts.Push(toast.Toast{Kind: toast.Error, Title: "Worker panic", Body: fmt.Sprintf("%v", msg.Err)})
 		return m, nil
 
 	case tea.KeyPressMsg:
@@ -304,6 +327,23 @@ func (m *Model) handleKey(k tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	case "ctrl+b":
 		m.sidebarCollapsed = !m.sidebarCollapsed
 		return m, nil
+	case "ctrl+n":
+		m.toasts.Push(toast.Toast{Kind: toast.Info, Title: "New session", Body: "phase 2 — opens composer"})
+		return m, nil
+	case "ctrl+d":
+		m.compactDensity = !m.compactDensity
+		label := "comfortable"
+		if m.compactDensity {
+			label = "compact"
+		}
+		m.toasts.Push(toast.Toast{Kind: toast.Info, Title: "Density", Body: label})
+		return m, nil
+	case "ctrl+l":
+		if sess := m.currentSession(); sess != nil {
+			sess.Transcript = ""
+			m.scrollTr = 0
+		}
+		return m, nil
 	}
 
 	// Dev cheats.
@@ -371,8 +411,37 @@ func (m *Model) handleSidebarKey(key string) (tea.Model, tea.Cmd) {
 				m.engine.StartReplay(sess.ID)
 			}
 		}
+	case "s":
+		if sess := m.selectedSession(sessions); sess != nil && isLive(sess.Status) {
+			m.store.SetStatus(sess.ID, session.StatusPaused)
+			m.toasts.Push(toast.Toast{Kind: toast.Info, Title: "Stopped", Body: sess.Title})
+		}
+	case "r":
+		if sess := m.selectedSession(sessions); sess != nil && sess.Status == session.StatusPaused {
+			m.store.SetStatus(sess.ID, session.StatusRunning)
+			m.toasts.Push(toast.Toast{Kind: toast.Success, Title: "Resumed", Body: sess.Title})
+		}
+	case "x":
+		if sess := m.selectedSession(sessions); sess != nil {
+			m.openDialog(dialog.Confirm("Kill session", "Kill \""+sess.Title+"\"? This cannot be undone."))
+		}
+	case "d":
+		if sess := m.selectedSession(sessions); sess != nil && isTerminal(sess.Status) {
+			m.toasts.Push(toast.Toast{Kind: toast.Info, Title: "Archived", Body: sess.Title})
+		}
+	case "D":
+		if sess := m.selectedSession(sessions); sess != nil {
+			m.openDialog(dialog.Confirm("Delete session", "Delete \""+sess.Title+"\" permanently?"))
+		}
 	}
 	return m, nil
+}
+
+func (m *Model) selectedSession(sessions []*session.Session) *session.Session {
+	if m.selected >= 0 && m.selected < len(sessions) {
+		return sessions[m.selected]
+	}
+	return nil
 }
 
 func (m *Model) handleTranscriptKey(key string) (tea.Model, tea.Cmd) {
@@ -392,6 +461,19 @@ func (m *Model) handleTranscriptKey(key string) (tea.Model, tea.Cmd) {
 		m.autoFol = false
 	case "G":
 		m.autoFol = true
+	case "ctrl+d":
+		halfPage := max(1, (m.height-8)/2)
+		m.scrollTr += halfPage
+		m.autoFol = false
+	case "ctrl+u":
+		halfPage := max(1, (m.height-8)/2)
+		m.scrollTr -= halfPage
+		if m.scrollTr < 0 {
+			m.scrollTr = 0
+		}
+		m.autoFol = false
+	case " ":
+		m.toasts.Push(toast.Toast{Kind: toast.Info, Title: "Toggle", Body: "tool-call expand — phase 2"})
 	case "i":
 		m.focus = FocusInput
 	case "y":
@@ -598,6 +680,21 @@ func (m *Model) handleDevCheat(key string) (tea.Cmd, bool) {
 			m.toasts.Push(toast.Toast{Kind: toast.Error, Title: "Failed", Body: sess.Title})
 		}
 		return nil, true
+	case "ctrl+alt+1":
+		m.wsStatus = header.WSConnected
+		m.toasts.Push(toast.Toast{Kind: toast.Success, Title: "WS", Body: "connected"})
+		return nil, true
+	case "ctrl+alt+2":
+		m.wsStatus = header.WSReconnecting
+		m.toasts.Push(toast.Toast{Kind: toast.Warning, Title: "WS", Body: "reconnecting…"})
+		return nil, true
+	case "ctrl+alt+3":
+		m.wsStatus = header.WSDisconnected
+		m.toasts.Push(toast.Toast{Kind: toast.Error, Title: "WS", Body: "disconnected"})
+		return nil, true
+	case "ctrl+alt+n":
+		m.injectMockSession()
+		return nil, true
 	}
 	return nil, false
 }
@@ -617,6 +714,31 @@ func (m *Model) injectRandomToast() {
 		{Kind: toast.Error, Title: "Transport", Body: "ws flapped, reconnecting…"},
 	}
 	m.toasts.Push(samples[rand.Intn(len(samples))])
+}
+
+var mockCounter int
+
+func (m *Model) injectMockSession() {
+	mockCounter++
+	id := session.ID(fmt.Sprintf("sess_MOCK%02d", mockCounter))
+	titles := []string{
+		"implement caching layer",
+		"add rate limiting middleware",
+		"refactor error handling",
+		"update API documentation",
+	}
+	sess := &session.Session{
+		ID:      id,
+		Title:   titles[mockCounter%len(titles)],
+		Agent:   "codex",
+		Model:   "gpt-5-sonnet",
+		Workdir: "/Users/demon/projects/rag-broker",
+		Status:  session.StatusRunning,
+		Tokens:  0,
+		Budget:  128000,
+	}
+	m.store.Add(sess)
+	m.toasts.Push(toast.Toast{Kind: toast.Info, Title: "New session", Body: sess.Title})
 }
 
 // --- settings screen ---
@@ -714,6 +836,10 @@ func resolveTheme(name string) *theme.Theme {
 
 func isLive(s session.Status) bool {
 	return s == session.StatusRunning || s == session.StatusAwaitingInput || s == session.StatusAwaitingPerm || s == session.StatusStarting
+}
+
+func isTerminal(s session.Status) bool {
+	return s == session.StatusCompleted || s == session.StatusFailed || s == session.StatusPaused
 }
 
 // --- View ---
@@ -861,15 +987,17 @@ func (m *Model) renderMain() string {
 		Model:        hdrModel,
 		Focused:      focusedBtn,
 		TerminalName: m.caps.Label(),
+		WS:           m.wsStatus,
 	}, l.Width)
 
 	side := ""
 	if l.Sidebar.W > 0 {
 		side = sidebar.Render(m.theme, m.styles, sidebar.State{
-			Sessions: sessions,
-			Selected: m.selected,
-			Focused:  m.focus == FocusSidebar,
-			Now:      time.Now(),
+			Sessions:   sessions,
+			Selected:   m.selected,
+			Focused:    m.focus == FocusSidebar,
+			Now:        time.Now(),
+			PulsePhase: m.pulsePhase,
 		}, l.Sidebar.W, l.Sidebar.H)
 	}
 

@@ -1,10 +1,21 @@
 package header
 
 import (
+	"image/color"
 	"strings"
 
 	"charm.land/lipgloss/v2"
 	"github.com/demon/daemon-client/internal/theme"
+)
+
+// WSStatus represents the simulated WebSocket connection state shown in the
+// header dot indicator. Phase 1 uses dev cheats to cycle through states.
+type WSStatus int
+
+const (
+	WSConnected    WSStatus = iota // green ●
+	WSReconnecting                 // yellow ●
+	WSDisconnected                 // red ●
 )
 
 type State struct {
@@ -14,11 +25,21 @@ type State struct {
 	// highlight (accent left bar + bold label).
 	Focused      string
 	TerminalName string // e.g. "ghostty", "kitty" — from ghostty.Caps.Label()
+	WS           WSStatus
 }
 
 func Render(t *theme.Theme, st *theme.Styles, s State, w int) string {
 	accent := lipgloss.NewStyle().Foreground(t.Accent).Bold(true)
-	dot := lipgloss.NewStyle().Foreground(t.Success).Render("●")
+	var dotColor color.Color
+	switch s.WS {
+	case WSReconnecting:
+		dotColor = t.Warn
+	case WSDisconnected:
+		dotColor = t.Danger
+	default:
+		dotColor = t.Success
+	}
+	dot := lipgloss.NewStyle().Foreground(dotColor).Render("●")
 	fg := lipgloss.NewStyle().Foreground(t.Fg)
 
 	// Left group: wordmark + transport dot + agent · model + optional terminal badge

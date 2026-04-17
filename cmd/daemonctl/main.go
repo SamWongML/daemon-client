@@ -20,6 +20,12 @@ func main() {
 	resetConfig := flag.Bool("reset-config", false, "ignore existing config and re-run the onboarding wizard")
 	flag.Parse()
 
+	if *devMode {
+		if f, err := tea.LogToFile("daemonctl-debug.log", "daemonctl"); err == nil {
+			defer f.Close()
+		}
+	}
+
 	caps := ghostty.Detect()
 
 	store := session.NewStore()

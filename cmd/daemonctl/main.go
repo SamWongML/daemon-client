@@ -8,6 +8,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/demon/daemon-client/internal/app"
+	"github.com/demon/daemon-client/internal/ghostty"
 	"github.com/demon/daemon-client/internal/session"
 	"github.com/demon/daemon-client/internal/session/mock"
 )
@@ -19,6 +20,8 @@ func main() {
 	resetConfig := flag.Bool("reset-config", false, "ignore existing config and re-run the onboarding wizard")
 	flag.Parse()
 
+	caps := ghostty.Detect()
+
 	store := session.NewStore()
 	engine := mock.New(store)
 	if err := engine.LoadFixtures(); err != nil {
@@ -26,7 +29,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	m := app.New(store, engine, app.Options{
+	m := app.New(store, engine, caps, app.Options{
 		DevMode:         *devMode,
 		Theme:           *themeName,
 		Mouse:           !*noMouse,

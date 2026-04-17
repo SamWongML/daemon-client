@@ -12,7 +12,8 @@ type State struct {
 	Model string
 	// Focused is "settings", "help", or "" — drives the focused-button
 	// highlight (accent left bar + bold label).
-	Focused string
+	Focused      string
+	TerminalName string // e.g. "ghostty", "kitty" — from ghostty.Caps.Label()
 }
 
 func Render(t *theme.Theme, st *theme.Styles, s State, w int) string {
@@ -20,9 +21,13 @@ func Render(t *theme.Theme, st *theme.Styles, s State, w int) string {
 	dot := lipgloss.NewStyle().Foreground(t.Success).Render("●")
 	fg := lipgloss.NewStyle().Foreground(t.Fg)
 
-	// Left group: wordmark + transport dot + agent · model
+	// Left group: wordmark + transport dot + agent · model + optional terminal badge
+	termBadge := ""
+	if s.TerminalName != "" {
+		termBadge = "  " + lipgloss.NewStyle().Foreground(t.Dim).Render(s.TerminalName)
+	}
 	left := accent.Render("▌daemonctl") + "   " +
-		dot + " " + fg.Render(s.Agent+" · "+s.Model)
+		dot + " " + fg.Render(s.Agent+" · "+s.Model) + termBadge
 
 	// Right group: [⚙] [?]
 	right := renderBtn(t, "⚙", s.Focused == "settings") + " " +

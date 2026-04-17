@@ -3,7 +3,9 @@ package mock
 import (
 	"bufio"
 	"encoding/json"
+	"fmt"
 	"io/fs"
+	"runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -22,6 +24,13 @@ type event struct {
 	text    string
 	state   session.Status
 	delayMs int
+}
+
+// PanicEvent is sent via program.Send when a replay goroutine recovers from a
+// panic. The app layer handles it by showing an error toast.
+type PanicEvent struct {
+	Err   any
+	Stack string
 }
 
 // Engine replays canned transcripts via program.Send so the UI sees realistic streaming.
@@ -90,7 +99,16 @@ func (e *Engine) StartReplay(id session.ID) {
 		return
 	}
 	go func() {
-		defer func() { _ = recover() }()
+		defer func() {
+			if r := recover(); r != nil {
+				buf := make([]byte, 4096)
+				n := runtime.Stack(buf, false)
+				e.program.Send(PanicEvent{
+					Err:   r,
+					Stack: fmt.Sprintf("%v\n%s", r, buf[:n]),
+				})
+			}
+		}()
 		for _, ev := range sc.events {
 			switch ev.kind {
 			case "delay":

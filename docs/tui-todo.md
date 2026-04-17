@@ -68,7 +68,7 @@ Legend: `[x]` done · `[~]` partial · `[ ]` not started.
   - [x] First-run detection on splash-done
   - [ ] Resume-on-restart (`$XDG_STATE_HOME/daemonctl/onboarding.toml`)
 
-- [~] **M5 — Main layout (static)** ← M0 will modify all of these
+- [x] **M5 — Main layout (static)**
   - [x] Header ([internal/component/header/header.go](../internal/component/header/header.go))
   - [x] Sidebar w/ mock items ([internal/component/sidebar/sidebar.go](../internal/component/sidebar/sidebar.go))
   - [x] Transcript viewport ([internal/component/transcript/transcript.go](../internal/component/transcript/transcript.go))
@@ -83,13 +83,15 @@ Legend: `[x]` done · `[~]` partial · `[ ]` not started.
 - [~] **M7 — Keyboard bindings**
   - [x] Central bindings table ([internal/keys/keys.go](../internal/keys/keys.go))
   - [x] Global bindings (`?`, `⌃p`, `⌃,`, `⌃b`, `⌃c⌃c`, `⌃n`, `⌃d`, `⌃t`, `⌃l`)
-  - [ ] Full sidebar/transcript/input binding coverage per §9.2–9.4 (verify `o` $EDITOR, `⌃e` edit-in-editor, `space` toggle tool-call, `/n/N` search, `y` yank)
+  - [x] Sidebar bindings (`j/k`, `g/G`, `↵/l`, `s` stop, `r` resume, `x` kill, `d` archive, `D` delete)
+  - [x] Transcript bindings (`j/k`, `g/G`, `⌃d/⌃u` half-page, `y` yank, `space` toggle, `i` focus-input)
+  - [ ] Full `o` $EDITOR, `⌃e` edit-in-editor, `/n/N` search (phase 2 stubs)
   - [ ] Footer hints derived as union of global+screen+pane bindings
 
-- [~] **M8 — Dialogs + palette**
+- [x] **M8 — Dialogs + palette**
   - [x] Alert/Confirm/Question/Permission dialog ([internal/component/dialog/dialog.go](../internal/component/dialog/dialog.go))
   - [x] Command palette ([internal/component/palette/palette.go](../internal/component/palette/palette.go))
-  - [ ] Verify all 20 palette actions registered (§7.6)
+  - [x] 20 palette actions registered (§7.6)
 
 - [~] **M9 — Mock engine**
   - [x] Fixture loader + script parser ([internal/session/mock/engine.go](../internal/session/mock/engine.go))
@@ -99,32 +101,34 @@ Legend: `[x]` done · `[~]` partial · `[ ]` not started.
 - [~] **M10 — Toasts + animations**
   - [x] Toast stack ([internal/component/toast/toast.go](../internal/component/toast/toast.go))
   - [x] Seed 3 startup toasts (§14.3)
-  - [ ] Global `FrameMsg` / `PulseTickMsg` tick driving pulse + spinner
-  - [ ] Slide-in/out, modal fade, sidebar collapse, footer calm-rotation animations (revised §11)
+  - [x] Global `PulseTickMsg` tick (50ms) driving 1 Hz binary pulse on awaiting-state sidebar glyphs
+  - [ ] Slide-in/out, modal fade, sidebar collapse animations (revised ��11)
 
-- [ ] **M11 — Ghostty caps**
-  - [ ] `internal/ghostty/caps.go` capability detection
-  - [ ] OSC 9;4 aggregate progress
-  - [ ] OSC 52 clipboard yank
-  - [ ] OSC 8 hyperlinks in transcript
-  - [ ] OSC 777 desktop notifications
-  - [ ] Kitty keyboard protocol push/pop
+- [x] **M11 — Ghostty caps**
+  - [x] `internal/ghostty/caps.go` capability detection (env-var based: Ghostty, Kitty, WezTerm, iTerm, tmux)
+  - [x] OSC 9;4 aggregate progress via `tea.View.ProgressBar`
+  - [x] OSC 52 clipboard yank (`y` in transcript → `tea.SetClipboard`)
+  - [x] OSC 8 file hyperlinks in session header (title → workdir)
+  - [x] OSC 777 desktop notifications on awaiting sessions (via `/dev/tty`)
+  - [x] Header terminal badge (shows detected terminal name)
+  - [x] Header WS status dot (⌃⌥1/2/3 cycles connected/reconnecting/disconnected)
+  - [ ] Kitty keyboard protocol push/pop (deferred — Bubble Tea v2 handles key disambiguation)
 
 - [~] **M12 — Settings page**
   - [x] Settings screen + categories ([internal/component/settings/settings.go](../internal/component/settings/settings.go))
   - [ ] Verify all 8 categories editable + `⌃s` save round-trips to TOML
 
-- [~] **M13 — Dev cheats**
+- [x] **M13 — Dev cheats**
   - [x] `--dev` flag gating ([cmd/daemonctl/main.go](../cmd/daemonctl/main.go))
-  - [ ] Verify all `⌃⌥{1,2,3,n,p,q,f,c,t}` cheats implemented per §9.6
+  - [x] All `⌃⌥{1,2,3,n,p,q,f,c,t}` cheats implemented per §9.6
   - [x] `--no-mouse` flag
 
-- [ ] **M14 — Polish + goldens**
+- [~] **M14 — Polish + goldens**
   - [ ] `teatest` golden files: splash, sidebar, main layout × 3 breakpoints, each dialog
-  - [ ] `too small` screen (< 60×16)
-  - [ ] `defer recover()` → `PanicMsg` on every spawned goroutine
-  - [ ] `tea.LogToFile` only; no stdout writes
-  - [ ] `runewidth.StringWidth` for all truncation; `…` (U+2026) only
+  - [x] `too small` screen (< 60×16) — already in layout.Compute
+  - [x] `defer recover()` → `PanicEvent` on mock engine goroutines (sends via `program.Send`)
+  - [x] `tea.LogToFile` in dev mode; no stdout writes
+  - [ ] `runewidth.StringWidth` for all truncation; `…` (U+2026) only — audit needed
 
 ## Acceptance (§13)
 

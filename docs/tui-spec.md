@@ -201,20 +201,19 @@ func For(w, h int) Breakpoint {
 
 ### 5.3 Layout math (Normal breakpoint)
 
+All chrome is borderless (§6.4.1). Separators are dim `─` / `│` rules that occupy 0 extra lines (they replace a padding line). The diagram below uses `─` and `│` for separators, **not** box-drawing borders:
+
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│  HEADER (height = 1, width = W)                                 │
-├─────────────┬───────────────────────────────────────────────────┤
-│             │  SESSION HEADER (h = 2)                           │
-│   SIDEBAR   ├───────────────────────────────────────────────────┤
-│             │                                                   │
-│  w = 28     │          TRANSCRIPT (flex, h = H - 8 - inputH)    │
-│  h = H - 2  │                                                   │
-│             ├───────────────────────────────────────────────────┤
-│             │  INPUT  (h = dynamic, min 3, max 10)              │
-├─────────────┴───────────────────────────────────────────────────┤
-│  FOOTER  (h = 1)                                                │
-└─────────────────────────────────────────────────────────────────┘
+ HEADER (h=1, w=W)
+─────────────────────────────────────────────────────────────────
+ SIDEBAR (w=28)  │  SESSION HEADER (h=1)
+                 │ ─────────────────────────────────────────────
+                 │  TRANSCRIPT (flex)
+                 │
+                 │ ─────────────────────────────────────────────
+                 │  INPUT (h=dynamic, min 3, max 10)
+─────────────────────────────────────────────────────────────────
+ FOOTER (h=1, w=W)
 ```
 
 Formula:
@@ -222,12 +221,13 @@ Formula:
 ```
 headerH = 1
 footerH = 1
-sessionHeaderH = 2
+sessionHeaderH = 1      // was 2 — now single-line per §7.3.3
+separatorH = 0           // dim rules are drawn inside padding, not additional rows
 sidebarW = 28 (normal) | min(36, W*22/100) (wide) | 0 (compact-collapsed)
 sidebarH = H - headerH - footerH
 
-mainX = sidebarW
-mainW = W - sidebarW
+mainX = sidebarW + 1     // +1 for the vertical │ separator
+mainW = W - sidebarW - 1
 inputH = clamp(m.input.LineCount() + 2, 3, 10)
 transcriptH = H - headerH - footerH - sessionHeaderH - inputH
 ```
@@ -297,6 +297,52 @@ Buttons render differently based on focus × enabled:
 
 ---
 
+## 6.4 Visual language & density principles
+
+Phase 1 follows a **minimalist, chrome-light aesthetic** inspired by opencode (sst/opencode) and Crush (charmbracelet/crush). These rules are load-bearing — every section below defers to them. If a lower-section sketch appears to violate one of these rules, the rule wins.
+
+**References:** opencode's spartan header + toggleable chrome ([opencode.ai/docs/tui](https://opencode.ai/docs/tui/)); Crush's `BorderThick = ▌` left-edge accent instead of boxed frames ([Crush styling system](https://deepwiki.com/charmbracelet/crush/5.8-styling-system)); Claude Code's "no chrome, conversation first"; community trend toward single-accent palettes (Catppuccin, Charmtone).
+
+### 6.4.1 Borders
+
+- **No box borders on persistent chrome.** Header, sidebar, transcript, input, footer, session header — none of these get `lipgloss.RoundedBorder()` or `NormalBorder()`.
+- **Separation is achieved by:**
+  - A single vertical rule `│` (dim `theme.Border`) between sidebar and main pane.
+  - A single dim horizontal rule `─` (full width) between header ↔ body and body ↔ footer. Use `lipgloss.NewStyle().Border(lipgloss.NormalBorder(), false, false, true, false)` (bottom only) — never four-sided.
+  - Whitespace (1-col horizontal padding inside each pane).
+- **Box borders are reserved for modals:** command palette, help overlay, all four dialog types, filter bar popover. These may use `lipgloss.RoundedBorder()` in accent color.
+- The "New session" row at the top of the sidebar is **not** a boxed button — it is a single row with a `+` glyph and a left accent bar when focused. See §7.3.2.
+
+### 6.4.2 Status glyphs
+
+All session-state indicators use a **single-cell dot vocabulary** (Crush + Charmtone convention). No nerd-font icons, no emoji, no mixed metaphors.
+
+| Glyph | Meaning                                       | Color source       |
+| ----- | --------------------------------------------- | ------------------ |
+| `●`   | Running / active tool use                     | `theme.StRunning`  |
+| `◐`   | Pending / starting (pair with pulse, 1 Hz)    | `theme.StPending`  |
+| `○`   | Idle / paused                                 | `theme.Muted`      |
+| `✓`   | Completed                                     | `theme.Success`    |
+| `×`   | Failed (`U+00D7`, not `✗`)                    | `theme.Danger`     |
+| `!`   | Awaiting input / permission (pulse, 1 Hz)     | `theme.Warn`       |
+| `⋯`   | Spinner fallback when `◐` would churn rapidly | `theme.StPending`  |
+
+Rendering rule: one glyph + one space, never two glyphs in a row, never glyph-on-background. Color carries the meaning; the glyph shape is secondary.
+
+### 6.4.3 Color discipline
+
+- **One accent.** Pick one hue per theme (Charple-violet for `charm-dark`, Catppuccin mauve for `tokyonight-storm`, gruvbox orange for `gruvbox-hard`). It marks focus, primary buttons, and the sidebar selection bar — **nothing else**.
+- Four semantic colors for status (`Success`, `Warn`, `Danger`, `Info`). These are used only on status glyphs and dialog severity — never on body text.
+- Everything else is a foreground ramp: `Fg` (primary), `Muted` (~60%), `Dim` (~35%). Resist coloring more than ~5% of visible cells.
+
+### 6.4.4 Density
+
+- Default density is **comfortable**: 1 col horizontal padding, sidebar rows are 2 lines (not 3). `compact` density collapses sidebar rows to 1 line (glyph + title only).
+- The "3-line sidebar row" from earlier drafts is removed — line 3's activity text lives in the session header instead.
+- Header, session header, and footer are each **exactly 1 line**. No 2-line variants.
+
+---
+
 ## 7. Screens
 
 ### 7.1 Splash / landing screen
@@ -357,68 +403,113 @@ The default screen. Composed of Header + Sidebar + Session header + Transcript +
 
 #### 7.3.1 Header (height 1)
 
-Left to right, separated by `•`:
+Follows §6.4.1 (no border, one line only). Layout is two flushed groups separated by whitespace — **no `•` separators inside a group**; spacing alone does the work.
 
 ```
- ▌daemonctl  ●wss://prod.example.com  3/4 sessions  ⏱ 14:32  $0.42  [⚙] [?]
+ ▌daemonctl   ● codex · gpt-5                                        [⚙] [?]
 ```
 
-- `▌daemonctl` — app name in accent.
-- `●` — WebSocket status dot. Phase 1: always green, toggleable via dev cheat `⌃⌥1/2/3` to cycle connected/reconnecting/down for demos.
-- Server URL (truncated middle with `…` if needed).
-- Session count `active/max`.
-- Local time (updates every second via `tea.Tick(1*time.Second)`).
-- Aggregate cost estimate.
-- **`[⚙]`** — settings button, `FocusID = "header.settings"`, hotkey `⌃,`. Clickable (Bubble Tea v2 mouse).
-- **`[?]`** — help button, `FocusID = "header.help"`, hotkey `?`.
+Left group:
 
-> **Note to executor:** the user explicitly flagged that the previous layout sketch hid the settings entrance. `[⚙]` in the header is the canonical entry point. It must be visible in all breakpoints (in Compact mode, header drops the server URL and time to make room).
+- `▌daemonctl` — wordmark, accent color.
+- `● <agent> · <model>` — active session's agent/model. The `●` is the WebSocket/transport status dot (green/yellow/red from §6.4.2). Phase 1 default: green; `⌃⌥1/2/3` cycles states.
+
+Right group:
+
+- `[⚙]` — settings, `FocusID = "header.settings"`, hotkey `⌃,`.
+- `[?]` — help, `FocusID = "header.help"`, hotkey `?`.
+
+**Everything else moved out of the header:**
+
+- Server URL → Settings → Connection, and visible on hover of the status dot (OSC 8 title attribute on supporting terminals).
+- Session count `active/max` → footer status line (§7.3.6).
+- Clock → footer status line (right-aligned). Rationale: Ghostty already shows the OS clock; duplicating it here adds noise. If footer hides (Compact breakpoint), the clock disappears entirely — that is intentional.
+- Aggregate cost → footer status line, and on-demand via `/cost` palette action.
+
+> **Note to executor:** `[⚙]` in the header remains the canonical settings entry point and must be visible in every breakpoint. In Compact mode the header still renders `▌daemonctl   [⚙] [?]` (agent/model drops); the transport dot moves to the footer.
 
 #### 7.3.2 Sidebar
 
-28 cols wide (Normal), list-bubble with custom delegate. Title bar: `SESSIONS  (3/4)` on line 1, thin divider on line 2.
+28 cols wide (Normal). Custom list renderer (not the default `bubbles/list` delegate). No border around the sidebar itself — separated from the main pane by a single vertical `│` rule in `theme.Border` (§6.4.1).
 
-**Each item = 3 lines:**
-
-```
-▌ ⟳ refactor auth module                    ← line 1: glyph + title (truncated)
-    running • 2m14s • 14.2k tok              ← line 2: sub-line
-    ● editing src/auth/oauth.go              ← line 3: current activity (optional)
-```
-
-- Line 3 is omitted in `density = compact`. In compact density, items are 2 lines.
-- Selected item: left bar `▌` in accent color + bg tint 5% lighter than base.
-- Unread indicator: tiny undercurl under the title (`CSI 4 : 3 m`) + bullet (`•`) before the title.
-
-**Header item at top** (sticky):
+**Title row** (line 1, followed by one dim `─` separator line):
 
 ```
-┏━━━━━━━━━━━━━━━━━━━━━━━━━━┓
-┃ + New session  (⌃n)       ┃   ← focusable, opens task composer dialog
-┗━━━━━━━━━━━━━━━━━━━━━━━━━━┛
+ sessions   3
 ```
 
-**Filter bar** appears at top when `/` pressed (slide-down animation, 150ms):
+Lowercase, no `/max` (that lives in the footer). Column title is `theme.Muted`.
+
+**Each item = 2 lines** (comfortable density) / **1 line** (compact density):
 
 ```
-╭──────────────────────────╮
-│ / auth_                  │
-╰──────────────────────────╯
+ ● refactor auth module
+   running · 2m14s
 ```
+
+- Line 1: `glyph` (§6.4.2) + title. Title truncates with `…`, padded to column width.
+- Line 2: `status-label · elapsed` in `theme.Muted`. No token count here — moves to the session header. Compact density drops this line entirely.
+- **Selected**: left accent bar `▌` replaces the leading space. Foreground brightens to `theme.Fg`. **No background tint** — the accent bar alone communicates selection (inspired by Crush).
+- **Unread output** (new content since last focus): small `•` in accent color prepended to the title, no undercurl. Undercurl is reserved for search-match highlighting.
+- **Attention state** (`awaiting_input` / `awaiting_perm`): glyph is `!`, pulsing at 1 Hz (§11). Row gains a 1-cell left accent bar in `theme.Warn` even when unselected, so it's scannable without focus.
+
+**"New session" row** (sticky, line 0 of the list, above the title row):
+
+```
+ + new session                        ⌃n
+```
+
+One line. No box. Focused state renders `▌` accent bar + bright fg. Hotkey right-aligned in `theme.Dim`. Following §6.4.1, boxes are reserved for modals.
+
+**Filter bar** appears above the title row when `/` pressed (slide-down 120ms):
+
+```
+ / auth_
+```
+
+Plain row, single-cell `/` prefix in accent, no border. Dismissed by `Esc` or empty query + `Enter`. (The earlier rounded-border popup sketch is retired — `/` filter is a modal input, but a *lightweight* one; the border would break the sidebar's vertical rhythm.)
 
 Match highlights inline using `lipgloss.NewStyle().Underline(true)`.
 
-**Grouping:** items grouped by status in order `awaiting_* > running > idle > paused > completed > failed > disconnected`. Group headers render as 1-line dim text: `─── Needs attention (2) ───`.
+**Ordering — time buckets with severity as secondary sort:**
 
-#### 7.3.3 Session header (height 2)
+Items are **not** grouped by status. They are grouped by **last-activity time** into up to five buckets, in this fixed order. Empty buckets are not rendered:
+
+1. `active`    — any session currently in `running` / `awaiting_*` / `starting` (pinned to top regardless of age)
+2. `today`     — last-activity within the last 24h
+3. `this week` — last-activity within the last 7d
+4. `older`     — everything else still alive
+5. `archive`   — terminal states (`completed`, `failed`, `disconnected`) explicitly archived by the user
+
+Bucket headers are 1-line dim lowercase text with a trailing dim rule, no border:
 
 ```
- refactor auth module                              codex • gpt-5 • $0.12
- running • 2m14s • 14.2k / 128k tokens  ▓▓▓▓▓▓▓▓░░░░░░░░░░░░
+─── today ──────────────────
 ```
 
-Line 1: title, plus right-aligned `agent • model • cost`.
-Line 2: status string + elapsed + token usage + inline progress bar (context window fill). Progress bar uses `bubbles/progress` in `WithSolidFill` mode, 20 cols.
+**Within each bucket**, rows are sorted by **severity descending**, then by last-activity descending. The severity ladder (highest first, see §10 `Priority`):
+
+`awaiting_perm > awaiting_input > failed > disconnected > running > starting > pending > idle > paused > completed`
+
+This surfaces what needs attention at the top of the visible bucket without fragmenting the list by status. Pattern matches Todoist/TickTick "group by time, sort by priority".
+
+**Completed + archived dimming:** rows in `archive` render at ~40% opacity (`theme.Dim` fg, muted glyph). Density collapses to 1 line in archive regardless of the global density setting.
+
+#### 7.3.3 Session header (height 1)
+
+Single line. Border-less (§6.4.1). Left/right flushed with whitespace as the separator; no `•` inside a group.
+
+```
+ ● refactor auth module   2m14s   14.2k/128k ▓▓▓▓▓▓▓░░░░░░
+```
+
+- Left: status glyph (§6.4.2) + title (truncates with `…`).
+- Middle: elapsed time in `theme.Muted`.
+- Right: token usage `used/budget` + a 12-col inline context-window bar (`bubbles/progress`, `WithSolidFill`, no percent text). Bar color = `theme.Accent` at low usage, `theme.Warn` above 80%, `theme.Danger` above 95%.
+
+Agent/model is already shown in the app header (§7.3.1) — do not repeat it here. Cost is in the footer status line.
+
+A single dim `─` rule below this row separates it from the transcript.
 
 #### 7.3.4 Transcript pane
 
@@ -464,13 +555,23 @@ Placeholder text rotates every 4 seconds through a small list: `ask the agent…
 
 #### 7.3.6 Footer (height 1)
 
-Context-sensitive hints from the focused component's `key.Bindings`. Pipe-separated, truncated with `…`. Bubbles' `help.Model` does this:
+Single line, borderless, split into two zones with whitespace between them:
 
 ```
- tab next  ↵ send  ⌃p palette  ⌃b sidebar  ⌃s stop  ⌃r resume  ? help
+ tab next   ↵ send   ⌃p palette   ⌃b sidebar   ? help        3/4  $0.42  14:32
 ```
 
-The footer's binding list is a **union** of: global bindings + current screen's bindings + focused pane's bindings. Duplicates removed. Order: pane-specific first, then screen, then global.
+**Left zone — keybind hints.** Context-sensitive from the focused component's `key.Bindings`, separated by two spaces (no `·` / `|`). Bubbles' `help.Model` renders this; the binding list is a union of: global + current screen + focused pane. Duplicates removed. Order: pane-specific → screen → global. Truncate with `…` on overflow.
+
+**Right zone — status line.** Ambient state that used to live in the header (§7.3.1). Items are rendered only if they fit (right-to-left drop order: clock → cost → session-count):
+
+1. `active/max` session count (e.g. `3/4`).
+2. Aggregate cost (e.g. `$0.42`).
+3. Local time `HH:MM` (updates every 60s — not every second; no need for second-precision here).
+
+All right-zone items are `theme.Dim`. They carry no focus and no click target — they're passive readouts.
+
+**Calm-state rule** (opencode-inspired): when no session is active and no state has changed in 5s, the left zone fades to a single hint (`press ⌃p for commands`) and gently rotates every ~8s through `press ? for help`, `press ⌃n for a new session`. Animation reuses the global `FrameMsg` tick — do not schedule a dedicated ticker.
 
 ### 7.4 Settings page
 
@@ -685,13 +786,30 @@ const (
 
 Each status has:
 
-| Field      | Purpose                                              |
-| ---------- | ---------------------------------------------------- |
-| `Glyph`    | Nerd-font glyph + ASCII fallback                     |
-| `Color`    | via `Theme.St*`                                      |
-| `Label`    | human-readable                                       |
-| `Pulse`    | bool — should the glyph pulse (awaiting states only) |
-| `Priority` | int — for sidebar grouping                           |
+| Field      | Purpose                                                                      |
+| ---------- | ---------------------------------------------------------------------------- |
+| `Glyph`    | Single-cell dot from the §6.4.2 vocabulary — **no nerd-font / emoji icons** |
+| `Color`    | via `Theme.St*`                                                              |
+| `Label`    | human-readable lowercase label (e.g. `running`, `awaiting input`)            |
+| `Pulse`    | bool — should the glyph pulse (awaiting + starting states only)              |
+| `Severity` | int — descending sort weight for within-bucket sidebar ordering (§7.3.2)     |
+
+Concrete glyph + severity assignments:
+
+| Status             | Glyph | Pulse | Severity | Notes                                |
+| ------------------ | ----- | ----- | -------- | ------------------------------------ |
+| `StatusPending`    | `◐`   | yes   | 30       |                                      |
+| `StatusStarting`   | `◐`   | yes   | 35       | may also use `⋯` spinner variant    |
+| `StatusRunning`    | `●`   | no    | 40       |                                      |
+| `StatusAwaitingInput` | `!` | yes   | 90       |                                      |
+| `StatusAwaitingPerm`  | `!` | yes   | 100      | highest — demands immediate response |
+| `StatusIdle`       | `○`   | no    | 20       |                                      |
+| `StatusPaused`     | `○`   | no    | 15       |                                      |
+| `StatusCompleted`  | `✓`   | no    | 5        |                                      |
+| `StatusFailed`     | `×`   | no    | 80       |                                      |
+| `StatusDisconnected` | `×` | no    | 70       |                                      |
+
+The old `Priority` field (used for status-group ordering) is replaced by `Severity`. Sidebar no longer groups by status — it groups by time bucket and sorts within each bucket by severity descending (§7.3.2).
 
 Pulse animation: 1 Hz sine, alpha 0.5 → 1.0. Use a global `tea.Tick(50ms)` that emits a `PulseTickMsg{Phase float64}` consumed by all pulsing components.
 
@@ -701,14 +819,17 @@ Pulse animation: 1 Hz sine, alpha 0.5 → 1.0. Use a global `tea.Tick(50ms)` tha
 
 Kept cheap and purposeful. Everything is driven by a single global `tea.Tick(50ms)` timer emitting `FrameMsg{TickN int64}`. Components read `TickN` and compute their frame without scheduling their own tickers.
 
+> **Aesthetic cross-ref:** all visual chrome follows §6.4. In particular: no box borders on persistent panes, status glyphs from the §6.4.2 dot vocabulary, one accent color, body text in foreground ramp only.
+
 1. **Splash logo shimmer** — hue shift, 8 fps (every 3rd frame).
-2. **Pulse** (awaiting states) — 1 Hz sine on foreground alpha.
-3. **Spinner** (starting state) — `bubbles/spinner` with custom glyphs `⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏`, 12 fps.
+2. **Pulse** (awaiting / starting states) — 1 Hz sine on foreground alpha. Applies to glyph `!` and `◐` only.
+3. **Spinner** (starting state) — `bubbles/spinner` with custom glyphs `⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏`, 12 fps. Used as an alternative to `◐` when the session header shows starting state.
 4. **Toast slide** — `x` translates from `width+3` to final position over 150ms, ease-out.
-5. **Modal fade** — backdrop from `0` to `dim(0.4)` over 100ms.
-6. **Sidebar collapse/expand** — `width` animates over 150ms.
-7. **Filter bar slide-down** — `height 0 → 3` over 120ms.
+5. **Modal fade** — backdrop from `0` to `dim(0.4)` over 100ms. Applies only to modal overlays that have borders (§6.4.1).
+6. **Sidebar collapse/expand** — `width 28 → 0` over 150ms, with the vertical `│` separator disappearing on the last frame.
+7. **Filter bar slide-down** — `height 0 → 1` over 120ms (was 0→3 when the filter had a border box — now borderless, single line).
 8. **Focus-change accent bar** — 1 frame flash bright, then settle.
+9. **Footer calm rotation** — gentle 8s cycle between hint strings when idle (§7.3.6). No flicker — cross-fade by dimming the outgoing string over 2 frames, then brightening the incoming.
 
 No easing library needed; write a tiny `ease.OutCubic(t float64) float64` helper.
 

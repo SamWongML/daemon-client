@@ -1,55 +1,53 @@
 package header
 
 import (
-	"fmt"
 	"strings"
-	"time"
 
 	"charm.land/lipgloss/v2"
 	"github.com/demon/daemon-client/internal/theme"
 )
 
 type State struct {
-	ServerURL    string
-	Active       int
-	Max          int
-	TotalCost    float64
-	Now          time.Time
+	Agent string
+	Model string
+	// Focused is "settings", "help", or "" — drives the focused-button
+	// highlight (accent left bar + bold label).
+	Focused      string
 	TerminalName string // e.g. "ghostty", "kitty" — from ghostty.Caps.Label()
 }
 
 func Render(t *theme.Theme, st *theme.Styles, s State, w int) string {
 	accent := lipgloss.NewStyle().Foreground(t.Accent).Bold(true)
 	dot := lipgloss.NewStyle().Foreground(t.Success).Render("●")
-	dim := lipgloss.NewStyle().Foreground(t.Dim)
 	fg := lipgloss.NewStyle().Foreground(t.Fg)
 
-	parts := []string{
-		accent.Render("▌daemonctl"),
-		dot + " " + fg.Render(truncMiddle(s.ServerURL, 32)),
-		fg.Render(fmt.Sprintf("%d/%d sessions", s.Active, s.Max)),
-		dim.Render("⏱ " + s.Now.Format("15:04")),
-		dim.Render(fmt.Sprintf("$%.2f", s.TotalCost)),
-	}
+	// Left group: wordmark + transport dot + agent · model + optional terminal badge
+	termBadge := ""
 	if s.TerminalName != "" {
-		parts = append(parts, dim.Render(s.TerminalName))
+		termBadge = "  " + lipgloss.NewStyle().Foreground(t.Dim).Render(s.TerminalName)
 	}
-	parts = append(parts, dim.Render("[⚙]"), dim.Render("[?]"))
+	left := accent.Render("▌daemonctl") + "   " +
+		dot + " " + fg.Render(s.Agent+" · "+s.Model) + termBadge
 
-	sep := dim.Render(" • ")
-	line := strings.Join(parts, sep)
+	// Right group: [⚙] [?]
+	right := renderBtn(t, "⚙", s.Focused == "settings") + " " +
+		renderBtn(t, "?", s.Focused == "help")
+
+	gap := max(1, w-lipgloss.Width(left)-lipgloss.Width(right))
+	line := left + strings.Repeat(" ", gap) + right
 	if lipgloss.Width(line) > w {
 		line = ansiTruncate(line, w)
 	}
-	return line + strings.Repeat(" ", max(0, w-lipgloss.Width(line)))
+	return line
 }
 
-func truncMiddle(s string, max int) string {
-	if len(s) <= max {
-		return s
+func renderBtn(t *theme.Theme, glyph string, focused bool) string {
+	if focused {
+		bar := lipgloss.NewStyle().Foreground(t.Accent).Bold(true).Render("▌")
+		label := lipgloss.NewStyle().Foreground(t.Accent).Bold(true).Render(glyph)
+		return bar + label
 	}
-	half := (max - 1) / 2
-	return s[:half] + "…" + s[len(s)-half:]
+	return lipgloss.NewStyle().Foreground(t.Dim).Render("[" + glyph + "]")
 }
 
 func ansiTruncate(s string, width int) string {

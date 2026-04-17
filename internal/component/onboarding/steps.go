@@ -100,7 +100,7 @@ var steps = []step{
 		Kind:     stepSegmented,
 		Title:    "Appearance",
 		Subtitle: "Theme and density. Both can be changed later in settings.",
-		Options:  []string{"charm-dark", "charm-light", "tokyonight-storm", "gruvbox-hard"},
+		Options:  []string{"auto", "charm-dark", "charm-light", "tokyonight-storm", "gruvbox-hard"},
 		Options2: []string{"comfortable", "compact"},
 	},
 	{

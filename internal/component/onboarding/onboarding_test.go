@@ -96,7 +96,8 @@ func TestFullHappyPathWritesConfig(t *testing.T) {
 	}
 
 	// Step 8: Appearance (theme + density segmented).
-	// Move to "tokyonight-storm" (index 2).
+	// Move to "tokyonight-storm" (index 3 — auto, charm-dark, charm-light, tokyonight-storm).
+	press(m, "right", "")
 	press(m, "right", "")
 	press(m, "right", "")
 	press(m, "enter", "")

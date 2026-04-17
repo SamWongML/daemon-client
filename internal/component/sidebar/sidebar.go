@@ -12,11 +12,12 @@ import (
 )
 
 type State struct {
-	Sessions  []*session.Session
-	Selected  int // index into flattened list
-	Focused   bool
-	ScrollTop int
-	Now       time.Time // current time for bucket calculation
+	Sessions   []*session.Session
+	Selected   int // index into flattened list
+	Focused    bool
+	ScrollTop  int
+	Now        time.Time // current time for bucket calculation
+	PulsePhase float64   // 0.0..1.0 sine wave phase for glyph animation
 }
 
 // timeBucket classifies sessions into display groups.
@@ -121,7 +122,7 @@ func Render(t *theme.Theme, st *theme.Styles, s State, w, h int) string {
 			ruleW := max(0, w-len(label)-5)
 			lines = append(lines, dim.Render("─── "+label+" "+strings.Repeat("─", ruleW)))
 		}
-		lines = append(lines, renderItem(t, sess, i == s.Selected, s.Focused, w)...)
+		lines = append(lines, renderItem(t, sess, i == s.Selected, s.Focused, w, s.PulsePhase)...)
 	}
 
 	// Scroll window
@@ -159,11 +160,17 @@ func renderNewSession(t *theme.Theme, selected, focused bool, w int) string {
 	return prefix + label + strings.Repeat(" ", gap) + hint
 }
 
-func renderItem(t *theme.Theme, sess *session.Session, selected, focused bool, w int) []string {
+func renderItem(t *theme.Theme, sess *session.Session, selected, focused bool, w int, pulsePhase float64) []string {
 	statusCol := theme.StatusColor(t, sess.Status.Name())
-	glyph := lipgloss.NewStyle().Foreground(statusCol).Render(sess.Status.Glyph())
 
 	isAttention := sess.Status == session.StatusAwaitingInput || sess.Status == session.StatusAwaitingPerm
+
+	// For awaiting states, binary-pulse the glyph color between status color and dim.
+	glyphCol := statusCol
+	if isAttention && pulsePhase <= 0.5 {
+		glyphCol = t.Dim
+	}
+	glyph := lipgloss.NewStyle().Foreground(glyphCol).Render(sess.Status.Glyph())
 
 	titleStyle := lipgloss.NewStyle().Foreground(t.Fg)
 	if selected {
